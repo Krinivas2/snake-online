@@ -1,0 +1,5 @@
+# Zależności
+node_modules
+
+# Pliki systemowe
+.DS_Store

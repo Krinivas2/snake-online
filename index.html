@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Snake Online</title>
+    <style>
+        body { background-color: #121212; color: #e6e6e6; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Consolas', monospace; }
+        canvas { border: 1px solid #333; }
+        .info { margin-top: 15px; font-size: 18px; height: 25px; }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="infoPanel" class="info">Łączenie z serwerem...</div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
