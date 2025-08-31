@@ -23,7 +23,7 @@ let gameState = {
     game_over: false,
 };
 
-let pendingMoves = { a: null, b: null };
+let pendingMoves = { a: [], b: [] };
 
 function randomFreeCell(occupied) {
     const occupiedSet = new Set(occupied.map(c => `${c.x},${c.y}`));
@@ -46,8 +46,13 @@ function resetGame() {
     gameState.snake_a = [start_a, { x: start_a.x - 1, y: start_a.y }];
     gameState.snake_b = [start_b, { x: start_b.x + 1, y: start_b.y }];
 
-    pendingMoves.a = { x: 1, y: 0 };
-    pendingMoves.b = { x: -1, y: 0 };
+    // Zaktualizuj także lastDir dla graczy, jeśli istnieją
+    if (playerSlots.a && players[playerSlots.a]) players[playerSlots.a].lastDir = { x: 1, y: 0 };
+    if (playerSlots.b && players[playerSlots.b]) players[playerSlots.b].lastDir = { x: -1, y: 0 };
+
+    // Wyczyść i ustaw początkowe ruchy w kolejkach
+    pendingMoves.a = [{ x: 1, y: 0 }];
+    pendingMoves.b = [{ x: -1, y: 0 }];
 
     gameState.score_a = 0;
     gameState.score_b = 0;
@@ -65,8 +70,22 @@ function gameTick() {
     if (gameState.game_over) return;
     if (!playerSlots.a || !playerSlots.b) return; // Czekaj na dwóch graczy
 
+    // --- Pobierz ruch dla gracza A ---
+    let move_a = players[playerSlots.a].lastDir; // Domyślnie kontynuuj w tym samym kierunku
+    if (pendingMoves.a.length > 0) {
+        move_a = pendingMoves.a.shift(); // Weź pierwszy ruch z kolejki
+        players[playerSlots.a].lastDir = move_a; // Zaktualizuj ostatni wykonany kierunek
+    }
+
+    // --- Pobierz ruch dla gracza B ---
+    let move_b = players[playerSlots.b].lastDir;
+    if (pendingMoves.b.length > 0) {
+        move_b = pendingMoves.b.shift();
+        players[playerSlots.b].lastDir = move_b;
+    }
+
     // --- Aktualizacja Węża A ---
-    let head_a = { x: gameState.snake_a[0].x + pendingMoves.a.x, y: gameState.snake_a[0].y + pendingMoves.a.y };
+    let head_a = { x: gameState.snake_a[0].x + move_a.x, y: gameState.snake_a[0].y + move_a.y };
     if (head_a.x < 0 || head_a.x >= GRID_W || head_a.y < 0 || head_a.y >= GRID_H || isCoordInSnake(head_a, gameState.snake_a) || isCoordInSnake(head_a, gameState.snake_b)) {
         gameState.game_over = true;
     } else {
@@ -79,11 +98,17 @@ function gameTick() {
         }
     }
 
+    // Sprawdź, czy gra się już nie skończyła po ruchu gracza A
+    if(gameState.game_over) {
+        io.emit('gameState', gameState);
+        return;
+    }
+
     // --- Aktualizacja Węża B ---
-    let head_b = { x: gameState.snake_b[0].x + pendingMoves.b.x, y: gameState.snake_b[0].y + pendingMoves.b.y };
+    let head_b = { x: gameState.snake_b[0].x + move_b.x, y: gameState.snake_b[0].y + move_b.y };
     if (head_b.x < 0 || head_b.x >= GRID_W || head_b.y < 0 || head_b.y >= GRID_H || isCoordInSnake(head_b, gameState.snake_b) || isCoordInSnake(head_b, gameState.snake_a)) {
         gameState.game_over = true;
-    } else if(head_a.x === head_b.x && head_a.y === head_b.y) {
+    } else if(head_a.x === head_b.x && head_a.y === head_a.y) { // Kolizja czołowa
         gameState.game_over = true;
     } else {
         gameState.snake_b.unshift(head_b);
@@ -123,16 +148,20 @@ io.on('connection', (socket) => {
     socket.emit('playerRole', playerRole);
     socket.emit('gameState', gameState); // Wyślij aktualny stan do nowego gracza
 
-    socket.on('playerMove', (move) => {
-        const player = players[socket.id];
-        if (player && player.role !== 'spectator') {
-            // Walidacja ruchu (nie można zawrócić)
-            if ((move.x !== 0 && player.lastDir.x === 0) || (move.y !== 0 && player.lastDir.y === 0)) {
-                 pendingMoves[player.role] = move;
-                 player.lastDir = move;
-            }
+socket.on('playerMove', (move) => {
+    const player = players[socket.id];
+    if (player && player.role !== 'spectator') {
+        // Pobierz ostatni kierunek z kolejki lub ostatni wykonany kierunek
+        const playerQueue = pendingMoves[player.role];
+        const lastMove = playerQueue.length > 0 ? playerQueue[playerQueue.length - 1] : player.lastDir;
+
+        // Walidacja ruchu (nie można zawrócić)
+        // Sprawdza, czy nowy ruch nie jest przeciwny do ostatniego
+        if (move.x !== -lastMove.x || move.y !== -lastMove.y) {
+            playerQueue.push(move);
         }
-    });
+    }
+});
 
     socket.on('restartGame', () => {
         if(gameState.game_over) {
@@ -141,14 +170,19 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log(`User disconnected: ${socket.id}`);
-        const player = players[socket.id];
-        if (player) {
-            if (player.role === 'a') playerSlots.a = null;
-            if (player.role === 'b') playerSlots.b = null;
-            delete players[socket.id];
-            // Można dodać logikę pauzowania gry, gdy ktoś wyjdzie
+    console.log(`User disconnected: ${socket.id}`);
+    const player = players[socket.id];
+    if (player) {
+        if (player.role === 'a') {
+            playerSlots.a = null;
+            pendingMoves.a = []; // Wyczyść kolejkę
         }
+        if (player.role === 'b') {
+            playerSlots.b = null;
+            pendingMoves.b = []; // Wyczyść kolejkę
+        }
+        delete players[socket.id];
+    }
     });
 });
 
