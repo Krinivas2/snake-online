@@ -6,195 +6,219 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// Ustawienia gry - teraz na serwerze
+// Ustawienia gry
 const TILE = 12;
 const GRID_W = 56, GRID_H = 48;
 const FPS = 14;
 
-// Zmienne stanu gry na serwerze
-let players = {};
-let playerSlots = { a: null, b: null }; // Gracz 'a' i 'b'
-let gameState = {
-    snake_a: [],
-    snake_b: [],
-    food: {},
-    score_a: 0,
-    score_b: 0,
-    game_over: false,
-};
+// Zamiast globalnych zmiennych, mamy obiekt przechowujący wszystkie pokoje
+let rooms = {};
 
-let pendingMoves = { a: [], b: [] };
-
+// --- Funkcje pomocnicze dla gry (pozostają prawie bez zmian) ---
 function randomFreeCell(occupied) {
     const occupiedSet = new Set(occupied.map(c => `${c.x},${c.y}`));
     while (true) {
-        const c = {
-            x: Math.floor(Math.random() * GRID_W),
-            y: Math.floor(Math.random() * GRID_H)
-        };
-        if (!occupiedSet.has(`${c.x},${c.y}`)) {
-            return c;
-        }
+        const c = { x: Math.floor(Math.random() * GRID_W), y: Math.floor(Math.random() * GRID_H) };
+        if (!occupiedSet.has(`${c.x},${c.y}`)) return c;
     }
-}
-
-function resetGame() {
-    console.log("Resetting game...");
-    const start_a = { x: Math.floor(GRID_W / 4), y: Math.floor(GRID_H / 2) };
-    const start_b = { x: Math.floor(3 * GRID_W / 4), y: Math.floor(GRID_H / 2) };
-
-    gameState.snake_a = [start_a, { x: start_a.x - 1, y: start_a.y }];
-    gameState.snake_b = [start_b, { x: start_b.x + 1, y: start_b.y }];
-
-    // Zaktualizuj także lastDir dla graczy, jeśli istnieją
-    if (playerSlots.a && players[playerSlots.a]) players[playerSlots.a].lastDir = { x: 1, y: 0 };
-    if (playerSlots.b && players[playerSlots.b]) players[playerSlots.b].lastDir = { x: -1, y: 0 };
-
-    // Wyczyść i ustaw początkowe ruchy w kolejkach
-    pendingMoves.a = [{ x: 1, y: 0 }];
-    pendingMoves.b = [{ x: -1, y: 0 }];
-
-    gameState.score_a = 0;
-    gameState.score_b = 0;
-
-    const occupied = [...gameState.snake_a, ...gameState.snake_b];
-    gameState.food = randomFreeCell(occupied);
-    gameState.game_over = false;
 }
 
 function isCoordInSnake(coord, snake) {
     return snake.some(segment => segment.x === coord.x && segment.y === coord.y);
 }
 
-function gameTick() {
-    if (gameState.game_over) return;
-    if (!playerSlots.a || !playerSlots.b) return; // Czekaj na dwóch graczy
 
-    // --- Pobierz ruch dla gracza A ---
-    let move_a = players[playerSlots.a].lastDir; // Domyślnie kontynuuj w tym samym kierunku
-    if (pendingMoves.a.length > 0) {
-        move_a = pendingMoves.a.shift(); // Weź pierwszy ruch z kolejki
-        players[playerSlots.a].lastDir = move_a; // Zaktualizuj ostatni wykonany kierunek
-    }
-
-    // --- Pobierz ruch dla gracza B ---
-    let move_b = players[playerSlots.b].lastDir;
-    if (pendingMoves.b.length > 0) {
-        move_b = pendingMoves.b.shift();
-        players[playerSlots.b].lastDir = move_b;
-    }
-
-    // --- Aktualizacja Węża A ---
-    let head_a = { x: gameState.snake_a[0].x + move_a.x, y: gameState.snake_a[0].y + move_a.y };
-    if (head_a.x < 0 || head_a.x >= GRID_W || head_a.y < 0 || head_a.y >= GRID_H || isCoordInSnake(head_a, gameState.snake_a) || isCoordInSnake(head_a, gameState.snake_b)) {
-        gameState.game_over = true;
-    } else {
-        gameState.snake_a.unshift(head_a);
-        if (head_a.x === gameState.food.x && head_a.y === gameState.food.y) {
-            gameState.score_a++;
-            gameState.food = randomFreeCell([...gameState.snake_a, ...gameState.snake_b]);
-        } else {
-            gameState.snake_a.pop();
-        }
-    }
-
-    // Sprawdź, czy gra się już nie skończyła po ruchu gracza A
-    if(gameState.game_over) {
-        io.emit('gameState', gameState);
-        return;
-    }
-
-    // --- Aktualizacja Węża B ---
-    let head_b = { x: gameState.snake_b[0].x + move_b.x, y: gameState.snake_b[0].y + move_b.y };
-    if (head_b.x < 0 || head_b.x >= GRID_W || head_b.y < 0 || head_b.y >= GRID_H || isCoordInSnake(head_b, gameState.snake_b) || isCoordInSnake(head_b, gameState.snake_a)) {
-        gameState.game_over = true;
-    } else if(head_a.x === head_b.x && head_a.y === head_a.y) { // Kolizja czołowa
-        gameState.game_over = true;
-    } else {
-        gameState.snake_b.unshift(head_b);
-        if (head_b.x === gameState.food.x && head_b.y === gameState.food.y) {
-            gameState.score_b++;
-            gameState.food = randomFreeCell([...gameState.snake_a, ...gameState.snake_b]);
-        } else {
-            gameState.snake_b.pop();
-        }
-    }
-
-    // Rozsyłanie stanu do wszystkich
-    io.emit('gameState', gameState);
+// --- Logika Gry dla Konkretnego Pokoju ---
+function createNewRoomState() {
+    return {
+        players: {},
+        playerSlots: { a: null, b: null },
+        gameState: {
+            snake_a: [], snake_b: [], food: {},
+            score_a: 0, score_b: 0, game_over: false,
+        },
+        pendingMoves: { a: [], b: [] },
+        interval: null
+    };
 }
 
-io.on('connection', (socket) => {
-    console.log(`New user connected: ${socket.id}`);
+function resetGame(room) {
+    const start_a = { x: Math.floor(GRID_W / 4), y: Math.floor(GRID_H / 2) };
+    const start_b = { x: Math.floor(3 * GRID_W / 4), y: Math.floor(GRID_H / 2) };
 
-    // Przypisz rolę graczowi
-    let playerRole = null;
-    if (!playerSlots.a) {
-        playerRole = 'a';
-        playerSlots.a = socket.id;
-        players[socket.id] = { role: 'a', lastDir: { x: 1, y: 0 }};
-        console.log(`Assigned Player A to ${socket.id}`);
-    } else if (!playerSlots.b) {
-        playerRole = 'b';
-        playerSlots.b = socket.id;
-        players[socket.id] = { role: 'b', lastDir: { x: -1, y: 0 }};
-        console.log(`Assigned Player B to ${socket.id}`);
-        resetGame(); // Drugi gracz dołączył, zacznij grę
-    } else {
-        playerRole = 'spectator';
-        players[socket.id] = { role: 'spectator' };
-        console.log(`Assigned Spectator to ${socket.id}`);
+    room.gameState.snake_a = [start_a, { x: start_a.x - 1, y: start_a.y }];
+    room.gameState.snake_b = [start_b, { x: start_b.x + 1, y: start_b.y }];
+
+    room.pendingMoves = { a: [{ x: 1, y: 0 }], b: [{ x: -1, y: 0 }] };
+
+    if (room.playerSlots.a) room.players[room.playerSlots.a].lastDir = { x: 1, y: 0 };
+    if (room.playerSlots.b) room.players[room.playerSlots.b].lastDir = { x: -1, y: 0 };
+
+    room.gameState.score_a = 0; room.gameState.score_b = 0;
+    const occupied = [...room.gameState.snake_a, ...room.gameState.snake_b];
+    room.gameState.food = randomFreeCell(occupied);
+    room.gameState.game_over = false;
+
+    io.to(room.id).emit('gameState', room.gameState);
+}
+
+function gameTick(roomId) {
+    const room = rooms[roomId];
+    if (!room || room.gameState.game_over) return;
+
+    // Ta funkcja jest bardzo podobna do poprzedniej, ale operuje na obiekcie 'room'
+    // Używa też kolejki ruchów, co jest ulepszeniem z poprzedniego zadania
+    let move_a = room.players[room.playerSlots.a].lastDir;
+    if (room.pendingMoves.a.length > 0) {
+        move_a = room.pendingMoves.a.shift();
+        room.players[room.playerSlots.a].lastDir = move_a;
     }
-    socket.emit('playerRole', playerRole);
-    socket.emit('gameState', gameState); // Wyślij aktualny stan do nowego gracza
 
-socket.on('playerMove', (move) => {
-    const player = players[socket.id];
-    if (player && player.role !== 'spectator') {
-        // Pobierz ostatni kierunek z kolejki lub ostatni wykonany kierunek
-        const playerQueue = pendingMoves[player.role];
-        const lastMove = playerQueue.length > 0 ? playerQueue[playerQueue.length - 1] : player.lastDir;
+    let move_b = room.players[room.playerSlots.b].lastDir;
+    if (room.pendingMoves.b.length > 0) {
+        move_b = room.pendingMoves.b.shift();
+        room.players[room.playerSlots.b].lastDir = move_b;
+    }
 
-        // Walidacja ruchu (nie można zawrócić)
-        // Sprawdza, czy nowy ruch nie jest przeciwny do ostatniego
-        if (move.x !== -lastMove.x || move.y !== -lastMove.y) {
-            playerQueue.push(move);
+    let head_a = { x: room.gameState.snake_a[0].x + move_a.x, y: room.gameState.snake_a[0].y + move_a.y };
+    if (head_a.x<0||head_a.x>=GRID_W||head_a.y<0||head_a.y>=GRID_H||isCoordInSnake(head_a,room.gameState.snake_a)||isCoordInSnake(head_a,room.gameState.snake_b)) {
+        room.gameState.game_over = true;
+    } else {
+        room.gameState.snake_a.unshift(head_a);
+        if (head_a.x===room.gameState.food.x && head_a.y===room.gameState.food.y) {
+            room.gameState.score_a++;
+            room.gameState.food = randomFreeCell([...room.gameState.snake_a, ...room.gameState.snake_b]);
+        } else {
+            room.gameState.snake_a.pop();
         }
     }
-});
+
+    if(room.gameState.game_over) {
+        io.to(roomId).emit('gameState', room.gameState); return;
+    }
+
+    let head_b = { x: room.gameState.snake_b[0].x + move_b.x, y: room.gameState.snake_b[0].y + move_b.y };
+    if (head_b.x<0||head_b.x>=GRID_W||head_b.y<0||head_b.y>=GRID_H||isCoordInSnake(head_b,room.gameState.snake_b)||isCoordInSnake(head_b,room.gameState.snake_a)||(head_a.x===head_b.x&&head_a.y===head_b.y)) {
+        room.gameState.game_over = true;
+    } else {
+        room.gameState.snake_b.unshift(head_b);
+        if (head_b.x===room.gameState.food.x && head_b.y===room.gameState.food.y) {
+            room.gameState.score_b++;
+            room.gameState.food = randomFreeCell([...room.gameState.snake_a, ...room.gameState.snake_b]);
+        } else {
+            room.gameState.snake_b.pop();
+        }
+    }
+
+    io.to(roomId).emit('gameState', room.gameState);
+}
+
+function startGame(roomId) {
+    const room = rooms[roomId];
+    if (room.interval) clearInterval(room.interval);
+    resetGame(room);
+    room.interval = setInterval(() => gameTick(roomId), 1000 / FPS);
+}
+
+function getLobbyInfo() {
+    return Object.values(rooms).map(room => ({
+        id: room.id,
+        playerCount: Object.keys(room.players).length,
+        hasPassword: !!room.password
+    }));
+}
+
+
+// --- GŁÓWNA LOGIKA SOCKET.IO ---
+io.on('connection', (socket) => {
+    console.log(`New user connected: ${socket.id}`);
+    socket.emit('updateRoomList', getLobbyInfo());
+
+    socket.on('createRoom', ({ password }) => {
+        const roomId = `room-${socket.id}`;
+        const room = createNewRoomState();
+        room.id = roomId;
+        room.password = password || null;
+
+        // Dodaj gracza tworzącego pokój
+        room.playerSlots.a = socket.id;
+        room.players[socket.id] = { role: 'a', lastDir: { x: 1, y: 0 } };
+        rooms[roomId] = room;
+
+        socket.join(roomId);
+        socket.roomId = roomId;
+
+        socket.emit('joinedRoom', { role: 'a' });
+        io.emit('updateRoomList', getLobbyInfo());
+        console.log(`User ${socket.id} created room ${roomId}`);
+    });
+
+    socket.on('joinRoom', ({ roomId, password }) => {
+        const room = rooms[roomId];
+        if (!room) return socket.emit('joinError', 'Pokój nie istnieje.');
+        if (Object.keys(room.players).length >= 2) return socket.emit('joinError', 'Pokój jest pełny.');
+        if (room.password && room.password !== password) return socket.emit('joinError', 'Nieprawidłowe hasło.');
+
+        // Dodaj gracza do pokoju
+        room.playerSlots.b = socket.id;
+        room.players[socket.id] = { role: 'b', lastDir: { x: -1, y: 0 } };
+
+        socket.join(roomId);
+        socket.roomId = roomId;
+
+        socket.emit('joinedRoom', { role: 'b' });
+        io.emit('updateRoomList', getLobbyInfo());
+        console.log(`User ${socket.id} joined room ${roomId}`);
+
+        // Drugi gracz dołączył, zacznij grę!
+        startGame(roomId);
+    });
+
+    socket.on('playerMove', (move) => {
+        const roomId = socket.roomId;
+        if (!roomId || !rooms[roomId]) return;
+
+        const room = rooms[roomId];
+        const player = room.players[socket.id];
+        if (player) {
+            const playerQueue = room.pendingMoves[player.role];
+            const lastMove = playerQueue.length > 0 ? playerQueue[playerQueue.length - 1] : player.lastDir;
+            if (move.x !== -lastMove.x || move.y !== -lastMove.y) {
+                playerQueue.push(move);
+            }
+        }
+    });
 
     socket.on('restartGame', () => {
-        if(gameState.game_over) {
-            resetGame();
+        const roomId = socket.roomId;
+        if (!roomId || !rooms[roomId]) return;
+        const room = rooms[roomId];
+        if (room.gameState.game_over) {
+            // Restart może zainicjować tylko pierwszy gracz, aby uniknąć konfliktów
+            if (socket.id === room.playerSlots.a) {
+                console.log(`Game restarting in room ${roomId}`);
+                resetGame(room);
+            }
         }
     });
 
     socket.on('disconnect', () => {
-    console.log(`User disconnected: ${socket.id}`);
-    const player = players[socket.id];
-    if (player) {
-        if (player.role === 'a') {
-            playerSlots.a = null;
-            pendingMoves.a = []; // Wyczyść kolejkę
+        console.log(`User disconnected: ${socket.id}`);
+        const roomId = socket.roomId;
+        if (roomId && rooms[roomId]) {
+            const room = rooms[roomId];
+            clearInterval(room.interval);
+            delete rooms[roomId];
+            io.to(roomId).emit('opponentLeft'); // Poinformuj drugiego gracza
+            io.emit('updateRoomList', getLobbyInfo());
+            console.log(`Room ${roomId} closed.`);
         }
-        if (player.role === 'b') {
-            playerSlots.b = null;
-            pendingMoves.b = []; // Wyczyść kolejkę
-        }
-        delete players[socket.id];
-    }
     });
 });
 
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
-});
-app.get('/game.js', (req, res) => {
-    res.sendFile(__dirname + '/game.js');
-});
+// Serwowanie plików statycznych
+app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
+app.get('/game.js', (req, res) => res.sendFile(__dirname + '/game.js'));
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-    setInterval(gameTick, 1000 / FPS);
-});
+server.listen(PORT, () => console.log(`Server is running on port ${PORT}`));

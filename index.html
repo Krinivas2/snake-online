@@ -2,16 +2,42 @@
 <html lang="pl">
 <head>
     <meta charset="UTF-8">
-    <title>Snake Online</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wieloosobowy Wąż</title>
     <style>
-        body { background-color: #121212; color: #e6e6e6; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; font-family: 'Consolas', monospace; }
-        canvas { border: 1px solid #333; }
-        .info { margin-top: 15px; font-size: 18px; height: 25px; }
+        body { background-color: #121212; color: #e2e2e2; font-family: 'Consolas', monospace; display: flex; flex-direction: column; align-items: center; margin: 0; }
+        h1, h2 { color: #fff; text-align: center; }
+        #lobbyContainer, #gameContainer { width: 672px; /* Szerokość canvas */ }
+        #lobbyContainer { display: block; }
+        #gameContainer { display: none; }
+        .room-item { background-color: #2a2a2a; border: 1px solid #444; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; }
+        button { background-color: #007bff; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; }
+        button:hover { background-color: #0056b3; }
+        input[type="text"] { padding: 8px; background-color: #333; border: 1px solid #555; color: #fff; border-radius: 4px; }
+        #infoPanel { text-align: center; margin-top: 10px; font-size: 14px; }
+        canvas { background-color: #121212; display: block; }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas"></canvas>
-    <div id="infoPanel" class="info">Łączenie z serwerem...</div>
+    <h1>Wieloosobowy Wąż</h1>
+
+    <div id="lobbyContainer">
+        <h2>Lobby</h2>
+        <div id="createRoomSection" style="margin-bottom: 20px; padding: 15px; background-color: #1e1e1e; border-radius: 5px;">
+            <h3>Stwórz nowy pokój</h3>
+            <input type="text" id="passwordInput" placeholder="Hasło (opcjonalne)">
+            <button id="createRoomBtn">Stwórz Pokój</button>
+        </div>
+
+        <h3>Dostępne Pokoje</h3>
+        <div id="roomList">
+            </div>
+    </div>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <p id="infoPanel">Oczekiwanie na drugiego gracza...</p>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="game.js"></script>
