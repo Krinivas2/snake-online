@@ -9,10 +9,18 @@ const roomList = document.getElementById('roomList');
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const infoPanel = document.getElementById('infoPanel');
+let mainMenuContainer; // Zdefiniowane globalnie
+
+// --- Zmienne stanu gry ---
+let gameMode = 'menu'; // 'menu', 'online', 'local'
+let playerRole = null;
+let localGameState = {};
+let localGameInterval = null;
+let dir_a, dir_b, next_dir_a, next_dir_b;
 
 // --- Logika Menu Głównego ---
 function initializeMainMenu() {
-    const mainMenuContainer = document.createElement('div');
+    mainMenuContainer = document.createElement('div');
     mainMenuContainer.id = 'mainMenuContainer';
     mainMenuContainer.style.textAlign = 'center';
     mainMenuContainer.style.paddingTop = '5vh';
@@ -61,26 +69,24 @@ function initializeMainMenu() {
 
     document.body.insertBefore(mainMenuContainer, lobbyContainer);
 
-    // Domyślnie ukryj inne kontenery
     lobbyContainer.style.display = 'none';
     gameContainer.style.display = 'none';
 
-    // Event Listeners dla przycisków menu
     singlePlayerBtn.addEventListener('click', () => {
         alert('Tryb jednoosobowy jest w trakcie tworzenia!');
     });
 
     twoPlayerBtn.addEventListener('click', () => {
-        alert('Tryb dwuosobowy jest w trakcie tworzenia!');
+        startLocalTwoPlayerGame();
     });
 
     onlineLobbyBtn.addEventListener('click', () => {
+        gameMode = 'online';
         mainMenuContainer.style.display = 'none';
         lobbyContainer.style.display = 'block';
     });
 }
 
-// Uruchom menu po załadowaniu strony
 window.addEventListener('DOMContentLoaded', initializeMainMenu);
 
 
@@ -98,7 +104,6 @@ const BG = 'rgb(18, 18, 18)';
 const GRID = 'rgb(30, 30, 30)';
 const TEXT = 'rgb(230, 230, 230)';
 
-let playerRole = null;
 
 // --- Funkcje rysujące ---
 function drawGrid() {
@@ -176,18 +181,124 @@ function draw(state) {
         ctx.textAlign = 'center';
         ctx.font = "bold 36px 'Consolas', monospace";
         ctx.fillText("KONIEC GRY", WIDTH / 2, HEIGHT / 2 - 20);
-        if (playerRole !== 'spectator') {
-            ctx.font = "16px 'Consolas', monospace";
-            ctx.fillText("Gracz A wciska R, aby zagrać ponownie.", WIDTH / 2, HEIGHT / 2 + 20);
-        }
+        ctx.font = "16px 'Consolas', monospace";
+        ctx.fillText("Wciśnij R, aby zagrać ponownie.", WIDTH / 2, HEIGHT / 2 + 20);
         ctx.textAlign = 'left';
     }
 }
 
+// --- Logika Gry Lokalnej ---
+function generateFood() {
+    const allSnakeCells = [...localGameState.snake_a, ...localGameState.snake_b];
+    let foodPos;
+    do {
+        foodPos = {
+            x: Math.floor(Math.random() * GRID_W),
+            y: Math.floor(Math.random() * GRID_H)
+        };
+    } while (allSnakeCells.some(cell => cell.x === foodPos.x && cell.y === foodPos.y));
+    localGameState.food = foodPos;
+}
 
-// --- Logika Lobby ---
+function startLocalTwoPlayerGame() {
+    gameMode = 'local';
+    playerRole = null;
+    mainMenuContainer.style.display = 'none';
+    lobbyContainer.style.display = 'none';
+    gameContainer.style.display = 'block';
+
+    if (localGameInterval) clearInterval(localGameInterval);
+
+    localGameState = {
+        snake_a: [{ x: 10, y: 10 }],
+        snake_b: [{ x: GRID_W - 11, y: 10 }],
+        food: {},
+        score_a: 0,
+        score_b: 0,
+        game_over: false,
+    };
+
+    dir_a = { x: 1, y: 0 };
+    dir_b = { x: -1, y: 0 };
+    next_dir_a = { x: 1, y: 0 };
+    next_dir_b = { x: -1, y: 0 };
+
+    infoPanel.textContent = "Gracz A: Strzałki | Gracz B: WASD | 'R' - Restart";
+    generateFood();
+    localGameInterval = setInterval(localGameLoop, 100);
+}
+
+function localGameLoop() {
+    if (localGameState.game_over) return;
+
+    dir_a = next_dir_a;
+    dir_b = next_dir_b;
+
+    // --- Ruch Węży ---
+    const head_a = { x: localGameState.snake_a[0].x + dir_a.x, y: localGameState.snake_a[0].y + dir_a.y };
+    localGameState.snake_a.unshift(head_a);
+
+    const head_b = { x: localGameState.snake_b[0].x + dir_b.x, y: localGameState.snake_b[0].y + dir_b.y };
+    localGameState.snake_b.unshift(head_b);
+
+    // --- Kolizje ---
+    const isCollision = (snake) => {
+        const head = snake[0];
+        // Kolizja ze ścianą
+        if (head.x < 0 || head.x >= GRID_W || head.y < 0 || head.y >= GRID_H) return true;
+        // Kolizja z samym sobą
+        for (let i = 1; i < snake.length; i++) {
+            if (head.x === snake[i].x && head.y === snake[i].y) return true;
+        }
+        return false;
+    };
+
+    // Kolizja Węża A z Wężem B
+    for(let i = 0; i < localGameState.snake_b.length; i++){
+        if(head_a.x === localGameState.snake_b[i].x && head_a.y === localGameState.snake_b[i].y) {
+            localGameState.game_over = true;
+        }
+    }
+    // Kolizja Węża B z Wężem A
+    for(let i = 0; i < localGameState.snake_a.length; i++){
+        if(head_b.x === localGameState.snake_a[i].x && head_b.y === localGameState.snake_a[i].y) {
+            localGameState.game_over = true;
+        }
+    }
+
+
+    if (isCollision(localGameState.snake_a) || isCollision(localGameState.snake_b) || localGameState.game_over) {
+        localGameState.game_over = true;
+        clearInterval(localGameInterval);
+        draw(localGameState);
+        return;
+    }
+
+    // --- Jedzenie ---
+    let ateFoodA = head_a.x === localGameState.food.x && head_a.y === localGameState.food.y;
+    if (ateFoodA) {
+        localGameState.score_a++;
+        generateFood();
+    } else {
+        localGameState.snake_a.pop();
+    }
+
+    let ateFoodB = head_b.x === localGameState.food.x && head_b.y === localGameState.food.y;
+    if (ateFoodB) {
+        localGameState.score_b++;
+        // Jeśli obaj zjedli w tej samej klatce, wygeneruj jedzenie tylko raz
+        if(!ateFoodA) generateFood();
+    } else {
+        localGameState.snake_b.pop();
+    }
+
+    draw(localGameState);
+}
+
+
+// --- Logika Lobby Online ---
 function updateRoomList(rooms) {
-    roomList.innerHTML = ''; // Wyczyść listę
+    roomList.innerHTML = '';
     if (rooms.length === 0) {
         roomList.innerHTML = '<p>Brak dostępnych pokoi. Stwórz własny!</p>';
         return;
@@ -196,13 +307,11 @@ function updateRoomList(rooms) {
     rooms.forEach(room => {
         const roomElement = document.createElement('div');
         roomElement.classList.add('room-item');
-
-        let lockIcon = room.hasPassword ? '&#128274;' : ''; // ikona kłódki
+        let lockIcon = room.hasPassword ? '&#128274;' : '';
         roomElement.innerHTML = `
             <span>Pokój #${room.id.substring(5, 10)} ${lockIcon}</span>
             <span>Gracze: ${room.playerCount}/2</span>
         `;
-
         if (room.playerCount < 2) {
             const joinBtn = document.createElement('button');
             joinBtn.textContent = 'Dołącz';
@@ -210,85 +319,69 @@ function updateRoomList(rooms) {
                 let password = '';
                 if (room.hasPassword) {
                     password = prompt('Podaj hasło do pokoju:');
-                    if (password === null) return; // Anulowano
+                    if (password === null) return;
                 }
-                socket.emit('joinRoom', {
-                    roomId: room.id,
-                    password: password
-                });
+                socket.emit('joinRoom', { roomId: room.id, password: password });
             };
             roomElement.appendChild(joinBtn);
         }
-
         roomList.appendChild(roomElement);
     });
 }
 
 createRoomBtn.addEventListener('click', () => {
     const password = passwordInput.value;
-    socket.emit('createRoom', {
-        password: password
-    });
+    socket.emit('createRoom', { password: password });
 });
-
 
 // --- Nasłuchiwanie na Zdarzenia Socket.IO ---
-
-socket.on('updateRoomList', (rooms) => {
-    updateRoomList(rooms);
-});
-
+socket.on('updateRoomList', (rooms) => updateRoomList(rooms));
 socket.on('joinedRoom', (data) => {
     playerRole = data.role;
     lobbyContainer.style.display = 'none';
     gameContainer.style.display = 'block';
-
     if (data.role === 'a') infoPanel.textContent = "Jesteś Graczem A (zielony). Oczekiwanie na drugiego gracza...";
     else if (data.role === 'b') infoPanel.textContent = "Jesteś Graczem B (niebieski). Gra zaraz się rozpocznie!";
 });
-
-socket.on('joinError', (message) => {
-    alert(message);
-});
-
+socket.on('joinError', (message) => alert(message));
 socket.on('gameState', (state) => {
-    if (state.score_a === 0 && state.score_b === 0 && !state.game_over) {
+    if (playerRole && state.score_a === 0 && state.score_b === 0 && !state.game_over) {
         if (playerRole === 'a') infoPanel.textContent = "Gracz A (zielony) | Sterowanie: Strzałki lub WASD";
         if (playerRole === 'b') infoPanel.textContent = "Gracz B (niebieski) | Sterowanie: Strzałki lub WASD";
     }
     draw(state);
 });
-
 socket.on('opponentLeft', () => {
     alert('Przeciwnik opuścił grę. Zostaniesz przeniesiony do lobby.');
-    window.location.reload(); // Najprostszy sposób na powrót do lobby
+    window.location.reload();
 });
 
-// Nasłuchiwanie na klawisze
+// --- Sterowanie ---
 window.addEventListener('keydown', e => {
-    if (!playerRole) return;
-    let move = null;
-    switch (e.key.toLowerCase()) {
-        case 'arrowup':
-        case 'w':
-            move = { x: 0, y: -1 };
-            break;
-        case 'arrowdown':
-        case 's':
-            move = { x: 0, y: 1 };
-            break;
-        case 'arrowleft':
-        case 'a':
-            move = { x: -1, y: 0 };
-            break;
-        case 'arrowright':
-        case 'd':
-            move = { x: 1, y: 0 };
-            break;
-        case 'r':
-            socket.emit('restartGame');
-            break;
+    if (gameMode === 'online' && playerRole) {
+        let move = null;
+        switch (e.key.toLowerCase()) {
+            case 'arrowup': case 'w': move = { x: 0, y: -1 }; break;
+            case 'arrowdown': case 's': move = { x: 0, y: 1 }; break;
+            case 'arrowleft': case 'a': move = { x: -1, y: 0 }; break;
+            case 'arrowright': case 'd': move = { x: 1, y: 0 }; break;
+            case 'r': socket.emit('restartGame'); break;
+        }
+        if (move) socket.emit('playerMove', move);
+    } else if (gameMode === 'local') {
+        const key = e.key.toLowerCase();
+        // Sterowanie Graczem A (Strzałki)
+        if (key === 'arrowup' && dir_a.y === 0) next_dir_a = { x: 0, y: -1 };
+        else if (key === 'arrowdown' && dir_a.y === 0) next_dir_a = { x: 0, y: 1 };
+        else if (key === 'arrowleft' && dir_a.x === 0) next_dir_a = { x: -1, y: 0 };
+        else if (key === 'arrowright' && dir_a.x === 0) next_dir_a = { x: 1, y: 0 };
+        // Sterowanie Graczem B (WASD)
+        else if (key === 'w' && dir_b.y === 0) next_dir_b = { x: 0, y: -1 };
+        else if (key === 's' && dir_b.y === 0) next_dir_b = { x: 0, y: 1 };
+        else if (key === 'a' && dir_b.x === 0) next_dir_b = { x: -1, y: 0 };
+        else if (key === 'd' && dir_b.x === 0) next_dir_b = { x: 1, y: 0 };
+        // Restart
+        else if (key === 'r') startLocalTwoPlayerGame();
     }
-    if (move) socket.emit('playerMove', move);
 });
 
