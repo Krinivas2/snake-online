@@ -6,9 +6,45 @@
     <title>Wieloosobowy Wąż</title>
     <style>
         body { background-color: #121212; color: #e2e2e2; font-family: 'Consolas', monospace; display: flex; flex-direction: column; align-items: center; margin: 0; }
+
+        /* >>> POCZĄTEK ZMIAN W CSS <<< */
+        #introContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #introVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Dopasuj wideo do ekranu */
+        }
+
+        #skipBtn {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            z-index: 101;
+            padding: 10px 20px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border: 1px solid #fff;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #lobbyContainer { display: none; /* Zmienione z 'block' na 'none' */ }
+        /* >>> KONIEC ZMIAN W CSS <<< */
+
         h1, h2 { color: #fff; text-align: center; }
-        #lobbyContainer, #gameContainer { width: 672px; /* Szerokość canvas */ }
-        #lobbyContainer { display: block; }
+        #gameContainer { width: 672px; }
         #gameContainer { display: none; }
         .room-item { background-color: #2a2a2a; border: 1px solid #444; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; }
         button { background-color: #007bff; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; }
@@ -19,6 +55,11 @@
     </style>
 </head>
 <body>
+    <div id="introContainer">
+        <video id="introVideo" src="/intro.mp4" autoplay muted></video>
+        <button id="skipBtn">Pomiń Intro</button>
+    </div>
+
     <h1>Wieloosobowy Wąż</h1>
 
     <div id="lobbyContainer">
@@ -28,10 +69,8 @@
             <input type="text" id="passwordInput" placeholder="Hasło (opcjonalne)">
             <button id="createRoomBtn">Stwórz Pokój</button>
         </div>
-
         <h3>Dostępne Pokoje</h3>
-        <div id="roomList">
-            </div>
+        <div id="roomList"></div>
     </div>
 
     <div id="gameContainer">
@@ -40,6 +79,26 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+        <script>
+    const introContainer = document.getElementById("introContainer");
+    const introVideo = document.getElementById("introVideo");
+    const skipBtn = document.getElementById("skipBtn");
+    const lobbyContainer = document.getElementById("lobbyContainer");
+
+    // Schowanie intro po zakończeniu filmu
+    introVideo.addEventListener("ended", () => {
+        introContainer.style.display = "none";
+        lobbyContainer.style.display = "block";
+    });
+
+    // Schowanie intro po kliknięciu "Pomiń"
+    skipBtn.addEventListener("click", () => {
+        introContainer.style.display = "none";
+        lobbyContainer.style.display = "block";
+        introVideo.pause();  // zatrzymaj film
+    });
+    </script>
     <script src="game.js"></script>
+
 </body>
 </html>
