@@ -6,9 +6,6 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
-// Udostępnij pliki statyczne z folderu 'public'
-app.use(express.static('public'));
-
 // Ustawienia gry
 const TILE = 12;
 const GRID_W = 56, GRID_H = 48;
