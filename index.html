@@ -1,64 +1,345 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wieloosobowy Wąż</title>
-    <style>
-        body { background-color: #121212; color: #e2e2e2; font-family: 'Consolas', monospace; display: flex; flex-direction: column; align-items: center; margin: 0; padding-top: 40px; overflow: hidden; }
-        /* ... (większość stylów bez zmian) ... */
-        h1, h2, h3 { color: #fff; text-align: center; }
-        #splashScreen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        #introVideo { max-width: 100%; max-height: 100%; outline: none; }
-        #langSelector { position: absolute; top: 10px; right: 15px; z-index: 1001; }
-        #langSelector span { cursor: pointer; margin: 0 5px; opacity: 0.6; }
-        #langSelector span:hover, #langSelector span.active { opacity: 1; text-decoration: underline; }
-        #nicknameWrapper { display: none; }
-        #lobbyContainer { display: none; }
-        #gameWrapper { display: none; flex-direction: column; align-items: center; }
-        #gameAndChat { display: flex; justify-content: center; align-items: flex-start; gap: 20px; }
-        #gameContainer, #lobbyContent, #nicknameWrapper { width: 672px; }
-        .room-item { background-color: #2a2a2a; border: 1px solid #444; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-radius: 4px; }
-        button { background-color: #007bff; color: white; border: none; padding: 8px 12px; cursor: pointer; border-radius: 4px; }
-        button:hover { background-color: #0056b3; }
-        input[type="text"] { padding: 8px; background-color: #333; border: 1px solid #555; color: #fff; border-radius: 4px; }
-        #infoPanel { text-align: center; margin-top: 10px; font-size: 14px; min-height: 20px; }
-        canvas { background-color: #121212; display: block; }
-        #nicknameSection { margin-bottom: 20px; padding: 25px; background-color: #1e1e1e; border-radius: 5px; text-align: center; }
-        #nicknameInput { width: 50%; margin-right: 10px; }
-        #chatContainer { width: 250px; height: 568px; background-color: #1e1e1e; border: 1px solid #444; border-radius: 5px; display: flex; flex-direction: column; }
-        #chatMessages { flex-grow: 1; overflow-y: auto; padding: 10px; border-bottom: 1px solid #444; }
-        #chatMessages p { margin: 0 0 8px 0; word-wrap: break-word; }
-        #chatMessages .system { color: #888; font-style: italic; }
-        #chatMessages .playerA { color: rgb(90, 220, 110); font-weight: bold; }
-        #chatMessages .playerB { color: rgb(90, 140, 220); font-weight: bold; }
-        #chatForm { display: flex; padding: 8px; }
-        #chatInput { flex-grow: 1; margin-right: 8px; }
-        /* ✅ NOWOŚĆ: Styl dla przycisku restartu */
-        #restartBtn { margin-top: 15px; padding: 10px 20px; font-size: 16px; }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Snake Online — Socket.IO Client</title>
+  <style>
+    body { margin:0; font-family: Inter, Roboto, Arial, system-ui; background:#071017; color:#e6eef3; }
+    .app { padding:12px; display:flex; flex-direction:column; gap:12px; height:100vh; box-sizing:border-box; }
+    .hud { display:flex; gap:12px; align-items:center; background:#0f1416; padding:10px; border-radius:8px; border:1px solid #222; }
+    input, button, select { background:#091017; border:1px solid #1f2a30; color:#e6eef3; padding:6px 8px; border-radius:6px; }
+    button.primary { background:linear-gradient(180deg,#127a73,#0f6f64); border:none; color:#fff; }
+    .main { display:flex; gap:12px; flex:1; min-height:0; }
+    .canvas-wrap { flex:1; background:#041317; border-radius:8px; padding:8px; display:flex; flex-direction:column; }
+    canvas { width:100%; height:100%; background:#021114; border-radius:6px; display:block; }
+    .side { width:260px; display:flex; flex-direction:column; gap:8px; }
+    .card { background:#0f1416; padding:10px; border-radius:8px; border:1px solid #222; }
+    ol { margin:0; padding-left:18px; color:#9aa3ad; max-height:360px; overflow:auto; }
+    .small { color:#9aa3ad; font-size:13px; }
+  </style>
 </head>
 <body>
-    <div id="splashScreen"> <video id="introVideo" autoplay muted playsinline> <source src="/intro.mp4" type="video/mp4"> Twoja przeglądarka nie obsługuje wideo. </video> </div> <div id="langSelector"> <span id="lang-pl" class="active" title="Polski">🇵🇱</span> <span id="lang-en" title="English">🇬🇧</span> <span id="lang-no" title="Norsk">🇳🇴</span> </div> <h1 data-translate-key="mainTitle">Wieloosobowy Wąż</h1> <div id="nicknameWrapper"> <div id="nicknameSection"> <h3 data-translate-key="enterNicknameTitle">Podaj swój nick</h3> <input type="text" id="nicknameInput" placeholder="2-12 znaków" maxlength="12"> <button id="nicknameBtn" data-translate-key="continueBtn">Kontynuuj</button> </div> </div> <div id="lobbyContainer"> <div id="lobbyContent"> <h2 data-translate-key="lobbyTitle">Lobby</h2> <div id="createRoomSection" style="margin-bottom: 20px; padding: 15px; background-color: #1e1e1e; border-radius: 5px;"> <h3 data-translate-key="createRoomTitle">Stwórz nowy pokój</h3> <input type="text" id="passwordInput" data-translate-key="passwordPlaceholder" placeholder="Hasło (opcjonalne)"> <button id="createRoomBtn" data-translate-key="createRoomBtn">Stwórz Pokój</button> </div> <h3 data-translate-key="availableRoomsTitle">Dostępne Pokoje</h3> <div id="roomList"></div> </div> </div>
-
-    <div id="gameWrapper">
-        <div id="gameAndChat">
-            <div id="gameContainer">
-                <canvas id="gameCanvas"></canvas>
-                <p id="infoPanel" data-translate-key="waitingForPlayer">Oczekiwanie na drugiego gracza...</p>
-            </div>
-            <div id="chatContainer">
-                <div id="chatMessages"></div>
-                <form id="chatForm">
-                    <input type="text" id="chatInput" data-translate-key="chatPlaceholder" placeholder="Napisz wiadomość..." autocomplete="off">
-                    <button type="submit" id="chatSendBtn" data-translate-key="chatSendBtn">Wyślij</button>
-                </form>
-            </div>
-        </div>
-        <button id="restartBtn" data-translate-key="restartBtn" style="display: none;">Zagraj ponownie</button>
+  <div class="app">
+    <div class="hud">
+      <input id="name" placeholder="Twój nick" />
+      <input id="roomIdInput" placeholder="ID pokoju (opcjonalne)" />
+      <button id="createRoomBtn" class="primary">Utwórz pokój</button>
+      <button id="joinRoomBtn">Dołącz jako gracz</button>
+      <button id="spectateRoomBtn">Dołącz jako widz</button>
+      <div style="margin-left:auto; display:flex; gap:12px; align-items:center;">
+        <div class="small">Ping: <strong id="ping">–</strong> ms</div>
+        <div class="small">Status: <strong id="status">niepołączony</strong></div>
+      </div>
     </div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="game.js"></script>
+    <div class="main">
+      <div class="canvas-wrap card" style="min-height:420px;">
+        <canvas id="game"></canvas>
+        <div class="small" style="margin-top:8px;">Sterowanie: Strzałki lub WASD — tylko jeśli jesteś <strong>Graczem</strong>.</div>
+      </div>
+
+      <div class="side">
+        <div class="card">
+          <h3 style="margin:0 0 6px 0;">Tablica wyników</h3>
+          <ol id="lb"><li style="color:#9aa3ad">—</li></ol>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 6px 0;">Informacje</h3>
+          <div id="pop" class="small">👤 — | 👀 —</div>
+          <div id="stateInfo" class="small" style="margin-top:6px;">Brak stanu.</div>
+          <div id="roomInfo" class="small" style="margin-top:6px;">Pokój: <strong id="roomLabel">—</strong></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 6px 0;">Szybkie</h3>
+          <button id="leaveBtn">Opuść pokój</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+  (function(){
+    const socket = io();
+
+    // UI
+    const elName = document.getElementById('name');
+    const elRoomId = document.getElementById('roomIdInput');
+    const createRoomBtn = document.getElementById('createRoomBtn');
+    const joinRoomBtn = document.getElementById('joinRoomBtn');
+    const spectateRoomBtn = document.getElementById('spectateRoomBtn');
+    const leaveBtn = document.getElementById('leaveBtn');
+    const elPing = document.getElementById('ping');
+    const elStatus = document.getElementById('status');
+    const elLB = document.getElementById('lb');
+    const elPop = document.getElementById('pop');
+    const elStateInfo = document.getElementById('stateInfo');
+    const roomLabel = document.getElementById('roomLabel');
+
+    let myRole = 'spectator';
+    let joinedRoom = null;
+
+    // Canvas
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    let DPR = window.devicePixelRatio || 1;
+    let cssW = 800, cssH = 600;
+    function fitCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      cssW = Math.max(320, Math.floor(rect.width - 12));
+      cssH = Math.max(240, Math.floor(rect.height - 50));
+      canvas.style.width = cssW + 'px';
+      canvas.style.height = cssH + 'px';
+      canvas.width = Math.floor(cssW * DPR);
+      canvas.height = Math.floor(cssH * DPR);
+      ctx.setTransform(DPR,0,0,DPR,0,0);
+    }
+    window.addEventListener('resize', fitCanvas);
+    fitCanvas();
+
+    function drawEmpty() {
+      ctx.clearRect(0,0,cssW,cssH);
+      ctx.fillStyle = '#021114';
+      ctx.fillRect(0,0,cssW,cssH);
+      ctx.fillStyle = '#9aa3ad';
+      ctx.font = '14px Inter, Arial';
+      ctx.fillText('Czekam na stan gry...', 20, 28);
+    }
+    drawEmpty();
+
+    // UI handlers
+    createRoomBtn.addEventListener('click', () => {
+      const name = (elName.value || '').trim() || undefined;
+      socket.emit('createRoom', { name });
+    });
+    joinRoomBtn.addEventListener('click', () => {
+      const rid = elRoomId.value.trim();
+      if (!rid) return alert('Podaj ID pokoju, do którego chcesz dołączyć.');
+      const name = elName.value.trim() || undefined;
+      socket.emit('joinRoom', rid, { name });
+    });
+    spectateRoomBtn.addEventListener('click', () => {
+      const rid = elRoomId.value.trim();
+      if (!rid) return alert('Podaj ID pokoju, który chcesz oglądać.');
+      socket.emit('spectateRoom', rid);
+    });
+    leaveBtn.addEventListener('click', () => {
+      socket.emit('leaveRoom');
+      joinedRoom = null; myRole = 'spectator'; roomLabel.textContent = '—';
+      elStatus.textContent = 'połączony';
+      drawEmpty();
+    });
+
+    // movement
+    const keyMap = {
+      'arrowup':'U', 'w':'U',
+      'arrowdown':'D', 's':'D',
+      'arrowleft':'L', 'a':'L',
+      'arrowright':'R', 'd':'R'
+    };
+    const dirMap = { 'U': {x:0,y:-1}, 'D':{x:0,y:1}, 'L':{x:-1,y:0}, 'R':{x:1,y:0} };
+
+    window.addEventListener('keydown', (e) => {
+      const k = (e.key || '').toLowerCase();
+      const m = keyMap[k];
+      if (!m) return;
+      if (myRole !== 'player') return; // only player can send moves
+      const delta = dirMap[m];
+      if (!delta) return;
+      // send move
+      socket.emit('playerMove', delta);
+      e.preventDefault();
+    });
+
+    // ping/pong
+    setInterval(() => {
+      const ts = Date.now();
+      socket.emit('ping', { ts });
+    }, 2000);
+    socket.on('pong', (payload) => {
+      if (payload && payload.ts) {
+        elPing.textContent = (Date.now() - payload.ts);
+      }
+    });
+
+    // Socket events
+    socket.on('connect', () => {
+      elStatus.textContent = 'połączony';
+    });
+    socket.on('disconnect', () => {
+      elStatus.textContent = 'rozłączono';
+      drawEmpty();
+    });
+
+    socket.on('roomCreated', (data) => {
+      if (data && data.roomId) {
+        elRoomId.value = data.roomId;
+        roomLabel.textContent = data.roomId;
+        alert('Pokój utworzony: ' + data.roomId + '\nPoproś znajomego o ID lub otwórz drugą kartę i dołącz.');
+      }
+    });
+
+    socket.on('roomJoined', (data) => {
+      if (data && data.roomId) {
+        joinedRoom = data.roomId;
+        roomLabel.textContent = data.roomId;
+      }
+    });
+
+    socket.on('joined', (data) => {
+      // server informuje o roli przy dołączeniu
+      if (data && data.roomId) {
+        joinedRoom = data.roomId;
+        roomLabel.textContent = data.roomId;
+      }
+      if (data && data.role) {
+        myRole = (data.role === 'a' || data.role === 'b') ? 'player' : 'spectator';
+        elStatus.textContent = `Połączono jako ${myRole} (${data.role || ''})`;
+      }
+    });
+
+    socket.on('spectatorJoined', (data) => {
+      if (data && data.roomId) {
+        joinedRoom = data.roomId;
+        roomLabel.textContent = data.roomId;
+        myRole = 'spectator';
+        elStatus.textContent = 'Połączono jako widz';
+      }
+    });
+
+    socket.on('errorMessage', (payload) => {
+      alert(payload && payload.message ? payload.message : 'Błąd serwera');
+    });
+
+    socket.on('population', (payload) => {
+      if (!payload) return;
+      elPop.textContent = `👤 ${payload.players} | 👀 ${payload.spectators}`;
+    });
+
+    socket.on('leaderboard', (payload) => {
+      const rows = (payload && payload.rows) || [];
+      elLB.innerHTML = '';
+      if (!rows.length) {
+        elLB.innerHTML = '<li style="color:#9aa3ad">Brak graczy.</li>';
+        return;
+      }
+      rows.forEach(r => {
+        const li = document.createElement('li');
+        li.textContent = `${r.name} — ${r.score}`;
+        elLB.appendChild(li);
+      });
+    });
+
+    socket.on('state', (payload) => {
+      const s = (payload && payload.state) ? payload.state : null;
+      if (!s) return;
+      elStateInfo.textContent = `Rund: ${s.round || '-'} | Graczy: ${(s.snakes || []).length} | Jedzenie: ${(s.food || []).length}`;
+      drawState(s);
+    });
+
+    // DRAW
+    function drawState(state) {
+      const grid = state.grid || { cols:40, rows:30, tile:20 };
+      const cols = grid.cols || 40;
+      const rows = grid.rows || 30;
+      const tile = grid.tile || 20;
+
+      const cellW = cssW / cols;
+      const cellH = cssH / rows;
+      const cs = Math.floor(Math.min(cellW, cellH));
+      const boardW = cs * cols;
+      const boardH = cs * rows;
+      const offsetX = Math.floor((cssW - boardW) / 2);
+      const offsetY = Math.floor((cssH - boardH) / 2);
+
+      ctx.clearRect(0,0,cssW,cssH);
+      ctx.fillStyle = '#021114';
+      ctx.fillRect(0,0,cssW,cssH);
+
+      ctx.save();
+      ctx.translate(offsetX, offsetY);
+
+      // food
+      (state.food || []).forEach(f => {
+        drawCellCircle(f[0], f[1], cs, '#ff4d4d');
+      });
+
+      // snakes
+      const snakes = state.snakes || [];
+      for (const s of snakes) {
+        const col = s.color || pickColor(s.id);
+        for (let i = 0; i < (s.body || []).length; i++) {
+          const [x,y] = s.body[i];
+          const isHead = (i === s.body.length - 1);
+          drawCellRect(x, y, cs, isHead ? brighten(col, 0.15) : col);
+        }
+        // name near head
+        if (s.body && s.body.length) {
+          const head = s.body[s.body.length - 1];
+          const px = head[0] * cs + cs/2;
+          const py = head[1] * cs - 6;
+          ctx.fillStyle = '#cfeee8';
+          ctx.font = '12px Inter, Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(s.name || s.id, px, py);
+        }
+      }
+
+      ctx.restore();
+    }
+
+    function drawCellRect(x,y,cs,fill) {
+      const xPx = Math.floor(x * cs) + 0.5;
+      const yPx = Math.floor(y * cs) + 0.5;
+      const pad = Math.max(0, Math.floor(cs * 0.08));
+      const w = Math.max(2, cs - pad*2);
+      const h = Math.max(2, cs - pad*2);
+      roundRect(ctx, xPx + pad, yPx + pad, w, h, Math.max(2, Math.floor(cs*0.12)), fill);
+    }
+    function drawCellCircle(x,y,cs,fill) {
+      const cx = x * cs + cs/2;
+      const cy = y * cs + cs/2;
+      const r = Math.max(3, cs * 0.35);
+      ctx.beginPath();
+      ctx.fillStyle = fill;
+      ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    function roundRect(ctx, x, y, w, h, r, fillStyle) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+      ctx.fillStyle = fillStyle;
+      ctx.fill();
+    }
+    function pickColor(seed) {
+      const palette = ['#1fb6ff','#7c3aed','#ff7ab6','#ffb86b','#2dd4bf','#f472b6','#60a5fa','#f97316'];
+      let idx = 0;
+      if (typeof seed === 'number') idx = Math.abs(seed) % palette.length;
+      else if (typeof seed === 'string') {
+        let s = 0; for (let i=0;i<seed.length;i++) s = (s<<5) - s + seed.charCodeAt(i);
+        idx = Math.abs(s) % palette.length;
+      }
+      return palette[idx];
+    }
+    function brighten(hex, amt) {
+      const col = hex.replace('#','');
+      const num = parseInt(col,16);
+      let r = (num >> 16) + Math.round(255*amt);
+      let g = ((num >> 8) & 0x00FF) + Math.round(255*amt);
+      let b = (num & 0x0000FF) + Math.round(255*amt);
+      r = Math.min(255, r); g = Math.min(255, g); b = Math.min(255, b);
+      return '#' + ( (1<<24) + (r<<16) + (g<<8) + b ).toString(16).slice(1);
+    }
+
+  })();
+  </script>
 </body>
 </html>
