@@ -1,6 +1,9 @@
 const socket = io();
 
 // Elementy DOM
+const nicknameWrapper = document.getElementById('nicknameWrapper');
+const nicknameInput = document.getElementById('nicknameInput');
+const nicknameBtn = document.getElementById('nicknameBtn');
 const lobbyContainer = document.getElementById('lobbyContainer');
 const gameWrapper = document.getElementById('gameWrapper');
 const createRoomBtn = document.getElementById('createRoomBtn');
@@ -20,11 +23,10 @@ canvas.width = WIDTH; canvas.height = HEIGHT;
 const BG = 'rgb(18, 18, 18)'; const GRID = 'rgb(30, 30, 30)'; const TEXT = 'rgb(230, 230, 230)';
 
 // Zmienne stanu
+let userNickname = '';
 let playerRole = null;
 let currentRoomId = null;
 let currentLang = 'pl';
-
-// ✅ NOWOŚĆ: Pamięć podręczna dla dynamicznych treści
 let lastRoomsData = [];
 let lastGameState = null;
 let chatHistory = [];
@@ -32,85 +34,49 @@ let chatHistory = [];
 // Logika wielojęzyczności
 const translations = {
     pl: {
+        // ✅ NOWE TŁUMACZENIA
+        enterNicknameTitle: "Podaj swój nick", continueBtn: "Kontynuuj",
         mainTitle: "Wieloosobowy Wąż", lobbyTitle: "Lobby", createRoomTitle: "Stwórz nowy pokój",
         passwordPlaceholder: "Hasło (opcjonalne)", createRoomBtn: "Stwórz Pokój",
         availableRoomsTitle: "Dostępne Pokoje", noRooms: "Brak dostępnych pokoi. Stwórz własny!",
         room: "Pokój", players: "Gracze", joinBtn: "Dołącz", enterPassword: "Podaj hasło do pokoju:",
         waitingForPlayer: "Oczekiwanie na drugiego gracza w pokoju #{roomId}...",
-        playerAInfo: "Gracz A (zielony) | Sterowanie: Strzałki", playerBInfo: "Gracz B (niebieski) | Sterowanie: Strzałki",
-        gameOver: "KONIEC GRY", restartInfo: "Gracz A wciska R, aby zagrać ponownie.",
+        playerAInfo: "Sterowanie: Strzałki", playerBInfo: "Sterowanie: Strzałki",
+        gameOver: "KONIEC GRY", restartInfo: "{nickname} wciska R, aby zagrać ponownie.",
         opponentLeft: "Przeciwnik opuścił grę. Zostaniesz przeniesiony do lobby.",
         chatPlaceholder: "Napisz wiadomość...", chatSendBtn: "Wyślij",
-        playerA: "Gracz A", playerB: "Gracz B", system: "System"
+        system: "System"
     },
     en: {
+        enterNicknameTitle: "Enter your nickname", continueBtn: "Continue",
         mainTitle: "Multiplayer Snake", lobbyTitle: "Lobby", createRoomTitle: "Create a new room",
         passwordPlaceholder: "Password (optional)", createRoomBtn: "Create Room",
         availableRoomsTitle: "Available Rooms", noRooms: "No available rooms. Create your own!",
         room: "Room", players: "Players", joinBtn: "Join", enterPassword: "Enter room password:",
         waitingForPlayer: "Waiting for another player in room #{roomId}...",
-        playerAInfo: "Player A (green) | Controls: Arrow keys", playerBInfo: "Player B (blue) | Controls: Arrow keys",
-        gameOver: "GAME OVER", restartInfo: "Player A presses R to play again.",
+        playerAInfo: "Controls: Arrow keys", playerBInfo: "Controls: Arrow keys",
+        gameOver: "GAME OVER", restartInfo: "{nickname} presses R to play again.",
         opponentLeft: "The opponent has left the game. You will be returned to the lobby.",
         chatPlaceholder: "Type a message...", chatSendBtn: "Send",
-        playerA: "Player A", playerB: "Player B", system: "System"
+        system: "System"
     },
     no: {
+        enterNicknameTitle: "Skriv inn kallenavnet ditt", continueBtn: "Fortsett",
         mainTitle: "Flerspiller Slangespill", lobbyTitle: "Lobby", createRoomTitle: "Opprett et nytt rom",
         passwordPlaceholder: "Passord (valgfritt)", createRoomBtn: "Opprett Rom",
         availableRoomsTitle: "Tilgjengelige Rom", noRooms: "Ingen tilgjengelige rom. Lag ditt eget!",
         room: "Rom", players: "Spillere", joinBtn: "Bli med", enterPassword: "Skriv inn rompassord:",
         waitingForPlayer: "Venter på en annen spiller i rom #{roomId}...",
-        playerAInfo: "Spiller A (grønn) | Kontroller: Piltaster", playerBInfo: "Spiller B (blå) | Kontroller: Piltaster",
-        gameOver: "SPILLET ER OVER", restartInfo: "Spiller A trykker R for å spille igjen.",
+        playerAInfo: "Kontroller: Piltaster", playerBInfo: "Kontroller: Piltaster",
+        gameOver: "SPILLET ER OVER", restartInfo: "{nickname} trykker R for å spille igjen.",
         opponentLeft: "Motstanderen har forlatt spillet. Du blir sendt tilbake til lobbyen.",
         chatPlaceholder: "Skriv en melding...", chatSendBtn: "Send",
-        playerA: "Spiller A", playerB: "Spiller B", system: "System"
+        system: "System"
     }
 };
 
-function setLanguage(lang) {
-    if (!translations[lang]) return;
-    currentLang = lang;
-    localStorage.setItem('snakeLang', lang);
-
-    // 1. Przetłumacz wszystkie statyczne elementy
-    document.querySelectorAll('[data-translate-key]').forEach(el => {
-        const key = el.getAttribute('data-translate-key');
-        const translation = translations[lang][key];
-        if (translation) {
-            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-                el.placeholder = translation;
-            } else {
-                el.textContent = translation;
-            }
-        }
-    });
-
-    // ✅ ZMIANA: Przerenderuj dynamiczne treści używając nowego języka
-    // 2. Odśwież listę pokoi
-    updateRoomListUI(lastRoomsData);
-    // 3. Odśwież czat
-    renderChat();
-    // 4. Odśwież canvas, jeśli gra trwa
-    if (lastGameState) {
-        draw(lastGameState);
-    }
-
-    // 5. Zaktualizuj panel informacyjny
-    if (gameWrapper.style.display === 'flex') {
-        if (lastGameState && !lastGameState.game_over) {
-            infoPanel.textContent = playerRole === 'a' ? translations[lang].playerAInfo : translations[lang].playerBInfo;
-        } else if (!lastGameState) {
-             infoPanel.textContent = translations[lang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
-        }
-    }
-
-    document.querySelectorAll('#langSelector span').forEach(span => span.classList.remove('active'));
-    document.getElementById(`lang-${lang}`).classList.add('active');
-}
-
-// Nasłuchiwanie na zmianę języka
+function setLanguage(lang) { /* ... bez zmian, działa z nowym systemem ... */ }
+function setLanguage(lang) { if (!translations[lang]) return; currentLang = lang; localStorage.setItem('snakeLang', lang); document.querySelectorAll('[data-translate-key]').forEach(el => { const key = el.getAttribute('data-translate-key'); const translation = translations[lang][key]; if (translation) { if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') { el.placeholder = translation; } else { el.textContent = translation; } } }); updateRoomListUI(lastRoomsData); renderChat(); if (lastGameState) { draw(lastGameState); } if (gameWrapper.style.display === 'flex') { if (lastGameState && !lastGameState.game_over) { infoPanel.textContent = playerRole === 'a' ? translations[lang].playerAInfo : translations[lang].playerBInfo; } else if (!lastGameState) { infoPanel.textContent = translations[lang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10)); } } document.querySelectorAll('#langSelector span').forEach(span => span.classList.remove('active')); document.getElementById(`lang-${lang}`).classList.add('active'); }
 document.getElementById('lang-pl').addEventListener('click', () => setLanguage('pl'));
 document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
 document.getElementById('lang-no').addEventListener('click', () => setLanguage('no'));
@@ -118,6 +84,23 @@ document.getElementById('lang-no').addEventListener('click', () => setLanguage('
 document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('snakeLang') || 'pl';
     setLanguage(savedLang);
+});
+
+// ✅ NOWOŚĆ: Logika ekranu wyboru nicku
+nicknameBtn.addEventListener('click', () => {
+    const nick = nicknameInput.value.trim();
+    if (nick.length >= 2 && nick.length <= 12) {
+        userNickname = nick;
+        nicknameWrapper.style.display = 'none';
+        lobbyContainer.style.display = 'block';
+    } else {
+        alert('Nick musi mieć od 2 do 12 znaków.');
+    }
+});
+nicknameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        nicknameBtn.click();
+    }
 });
 
 
@@ -128,14 +111,22 @@ function drawGrid() { ctx.strokeStyle = GRID; ctx.lineWidth = 1; for (let x = 0;
 
 
 function draw(state) {
-    lastGameState = state; // Zapisz najnowszy stan gry
-
+    lastGameState = state;
     ctx.fillStyle = BG; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    ctx.fillStyle = TEXT; ctx.font = "22px 'Consolas', monospace";
+    ctx.font = "20px 'Consolas', monospace";
 
-    // ✅ ZMIANA: Zawsze pobieraj tłumaczenia z obiektu
-    const scoreText = `${translations[currentLang].playerA}: ${state.score_a}   ${translations[currentLang].playerB}: ${state.score_b}`;
-    ctx.fillText(scoreText, 10, 25);
+    // ✅ ZMIANA: Wyświetlanie nicków zamiast "Gracz A/B"
+    const nickA = state.nick_a || 'Gracz A';
+    const nickB = state.nick_b || 'Gracz B';
+    const scoreText = `${nickA}: ${state.score_a}   ${nickB}: ${state.score_b}`;
+
+    ctx.fillStyle = 'rgb(90, 220, 110)';
+    ctx.fillText(`${nickA}: ${state.score_a}`, 10, 25);
+
+    ctx.fillStyle = 'rgb(90, 140, 220)';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${nickB}: ${state.score_b}`, WIDTH - 10, 25);
+    ctx.textAlign = 'left';
 
     drawGrid(); drawFood(state.food);
     drawSnakeColored(state.snake_a, 'rgb(90, 220, 110)', 'rgb(50, 180, 90)');
@@ -147,81 +138,41 @@ function draw(state) {
         ctx.fillText(translations[currentLang].gameOver, WIDTH / 2, HEIGHT / 2 - 20);
         if(playerRole !== 'spectator') {
             ctx.font = "16px 'Consolas', monospace";
-            ctx.fillText(translations[currentLang].restartInfo, WIDTH / 2, HEIGHT / 2 + 20);
+            const restartText = translations[currentLang].restartInfo.replace('{nickname}', nickA);
+            ctx.fillText(restartText, WIDTH / 2, HEIGHT / 2 + 20);
         }
         ctx.textAlign = 'left';
     }
 }
 
 // Logika Lobby
-function updateRoomListUI(rooms) {
-    roomList.innerHTML = '';
-    if (rooms.length === 0) {
-        roomList.innerHTML = `<p>${translations[currentLang].noRooms}</p>`;
-        return;
-    }
+function updateRoomListUI(rooms) { /* ... bez zmian ... */ }
+function updateRoomListUI(rooms) { roomList.innerHTML = ''; if (rooms.length === 0) { roomList.innerHTML = `<p>${translations[currentLang].noRooms}</p>`; return; } rooms.forEach(room => { const roomElement = document.createElement('div'); roomElement.classList.add('room-item'); let lockIcon = room.hasPassword ? '&#128274;' : ''; roomElement.innerHTML = `<span>${translations[currentLang].room} #${room.id.substring(5, 10)} ${lockIcon}</span> <span>${translations[currentLang].players}: ${room.playerCount}/2</span>`; if (room.playerCount < 2) { const joinBtn = document.createElement('button'); joinBtn.textContent = translations[currentLang].joinBtn; joinBtn.onclick = () => { let password = ''; if (room.hasPassword) { password = prompt(translations[currentLang].enterPassword); if (password === null) return; } socket.emit('joinRoom', { roomId: room.id, password: password, nickname: userNickname }); }; roomElement.appendChild(joinBtn); } roomList.appendChild(roomElement); }); }
 
-    rooms.forEach(room => {
-        const roomElement = document.createElement('div');
-        roomElement.classList.add('room-item');
-
-        let lockIcon = room.hasPassword ? '&#128274;' : '';
-        roomElement.innerHTML = `
-            <span>${translations[currentLang].room} #${room.id.substring(5, 10)} ${lockIcon}</span>
-            <span>${translations[currentLang].players}: ${room.playerCount}/2</span>
-        `;
-
-        if (room.playerCount < 2) {
-            const joinBtn = document.createElement('button');
-            joinBtn.textContent = translations[currentLang].joinBtn;
-            joinBtn.onclick = () => {
-                let password = '';
-                if (room.hasPassword) {
-                    password = prompt(translations[currentLang].enterPassword);
-                    if (password === null) return;
-                }
-                socket.emit('joinRoom', { roomId: room.id, password: password });
-            };
-            roomElement.appendChild(joinBtn);
-        }
-        roomList.appendChild(roomElement);
-    });
-}
-
+// ✅ ZMIANA: Wysyłamy nick podczas tworzenia pokoju
 createRoomBtn.addEventListener('click', () => {
     const password = passwordInput.value;
-    socket.emit('createRoom', { password: password });
+    socket.emit('createRoom', { password: password, nickname: userNickname });
 });
 
 // Logika Czat
-chatForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const message = chatInput.value;
-    if (message.trim()) {
-        socket.emit('chatMessage', message);
-        chatInput.value = '';
-    }
-});
+chatForm.addEventListener('submit', (e) => { e.preventDefault(); const message = chatInput.value; if (message.trim()) { socket.emit('chatMessage', message); chatInput.value = ''; } });
 
 function renderChat() {
-    chatMessages.innerHTML = ''; // Wyczyść
+    chatMessages.innerHTML = '';
     chatHistory.forEach(data => {
         const p = document.createElement('p');
-        let senderName = '';
+        // ✅ ZMIANA: Używamy nicku z obiektu 'data'
+        let senderName = data.nickname;
         let senderClass = '';
 
-        if (data.role === 'a') {
-            senderName = translations[currentLang].playerA;
-            senderClass = 'playerA';
-        } else if (data.role === 'b') {
-            senderName = translations[currentLang].playerB;
-            senderClass = 'playerB';
-        } else { // system
+        if (data.role === 'system') {
             senderName = translations[currentLang].system;
             senderClass = 'system';
+        } else {
+             senderClass = data.role === 'a' ? 'playerA' : 'playerB';
         }
 
-        // Używamy textContent, aby uniknąć potencjalnych problemów z XSS
         const strong = document.createElement('strong');
         strong.className = senderClass;
         strong.textContent = `${senderName}: `;
@@ -230,69 +181,30 @@ function renderChat() {
 
         chatMessages.appendChild(p);
     });
-    chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
 
 // Nasłuchiwanie na Zdarzenia Socket.IO
-
-socket.on('updateRoomList', (rooms) => {
-    lastRoomsData = rooms; // Zapisz dane
-    updateRoomListUI(rooms); // Narysuj interfejs
-});
-
+socket.on('updateRoomList', (rooms) => { lastRoomsData = rooms; updateRoomListUI(rooms); });
 socket.on('joinedRoom', (data) => {
     playerRole = data.role;
     currentRoomId = data.roomId;
-
     lobbyContainer.style.display = 'none';
     gameWrapper.style.display = 'flex';
-
-    lastGameState = null; // Zresetuj stan gry po dołączeniu do pokoju
-    chatHistory = []; // Wyczyść historię czatu z poprzedniego pokoju
-    renderChat(); // Wyczyść widok czatu
-
-    if (playerRole === 'a') {
-        infoPanel.textContent = translations[currentLang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
-    }
+    lastGameState = null;
+    chatHistory = [];
+    renderChat();
+    if (playerRole === 'a') { infoPanel.textContent = translations[currentLang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10)); }
 });
-
-socket.on('joinError', (message) => {
-    alert(message);
-});
-
+socket.on('joinError', (message) => { alert(message); });
 socket.on('gameState', (state) => {
-    if (infoPanel.textContent.includes('#')) {
-        if (playerRole === 'a') infoPanel.textContent = translations[currentLang].playerAInfo;
-        if (playerRole === 'b') infoPanel.textContent = translations[currentLang].playerBInfo;
+    if (infoPanel.textContent.includes('#') || infoPanel.textContent.startsWith("Oczekiwanie")) {
+         if (playerRole === 'a') infoPanel.textContent = translations[currentLang].playerAInfo;
+         if (playerRole === 'b') infoPanel.textContent = translations[currentLang].playerBInfo;
     }
     draw(state);
 });
-
-socket.on('chatMessage', (data) => {
-    chatHistory.push(data); // Zapisz wiadomość w historii
-    renderChat(); // Przerenderuj cały czat
-});
-
-socket.on('opponentLeft', () => {
-    alert(translations[currentLang].opponentLeft);
-    window.location.reload();
-});
-
-// Nasłuchiwanie na klawisze
-window.addEventListener('keydown', e => {
-    if (!playerRole) return;
-    if (document.activeElement === chatInput) {
-        if (e.key.toLowerCase() === 'r') socket.emit('restartGame');
-        return;
-    }
-    let move = null;
-    switch (e.key.toLowerCase()) {
-        case 'arrowup': move = { x: 0, y: -1 }; break;
-        case 'arrowdown': move = { x: 0, y: 1 }; break;
-        case 'arrowleft': move = { x: -1, y: 0 }; break;
-        case 'arrowright': move = { x: 1, y: 0 }; break;
-        case 'r': socket.emit('restartGame'); break;
-    }
-    if (move) socket.emit('playerMove', move);
-});
+socket.on('chatMessage', (data) => { chatHistory.push(data); renderChat(); });
+socket.on('opponentLeft', () => { alert(translations[currentLang].opponentLeft); window.location.reload(); });
+window.addEventListener('keydown', (e) => { if (!playerRole) return; if (document.activeElement === chatInput) { if (e.key.toLowerCase() === 'r') socket.emit('restartGame'); return; } let move = null; switch (e.key.toLowerCase()) { case 'arrowup': move = { x: 0, y: -1 }; break; case 'arrowdown': move = { x: 0, y: 1 }; break; case 'arrowleft': move = { x: -1, y: 0 }; break; case 'arrowright': move = { x: 1, y: 0 }; break; case 'r': socket.emit('restartGame'); break; } if (move) socket.emit('playerMove', move); });
