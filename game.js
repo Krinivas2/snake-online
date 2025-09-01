@@ -12,7 +12,7 @@ const infoPanel = document.getElementById('infoPanel');
 let mainMenuContainer; // Zdefiniowane globalnie
 
 // --- Zmienne stanu gry ---
-let gameMode = 'menu'; // 'menu', 'online', 'local'
+let gameMode = 'menu'; // 'menu', 'online', 'local', 'localSingle'
 let playerRole = null;
 let localGameState = {};
 let localGameInterval = null;
@@ -73,7 +73,7 @@ function initializeMainMenu() {
     gameContainer.style.display = 'none';
 
     singlePlayerBtn.addEventListener('click', () => {
-        alert('Tryb jednoosobowy jest w trakcie tworzenia!');
+        startLocalSinglePlayerGame();
     });
 
     twoPlayerBtn.addEventListener('click', () => {
@@ -168,7 +168,8 @@ function draw(state) {
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
     ctx.fillStyle = TEXT;
     ctx.font = "22px 'Consolas', monospace";
-    ctx.fillText(`Gracz A: ${state.score_a}   Gracz B: ${state.score_b}`, 10, 25);
+    const scoreText = (gameMode === 'localSingle') ? `Gracz: ${state.score_a}   AI: ${state.score_b}` : `Gracz A: ${state.score_a}   Gracz B: ${state.score_b}`;
+    ctx.fillText(scoreText, 10, 25);
     drawGrid();
     drawFood(state.food);
     drawSnakeColored(state.snake_a, 'rgb(90, 220, 110)', 'rgb(50, 180, 90)');
@@ -199,6 +200,148 @@ function generateFood() {
     } while (allSnakeCells.some(cell => cell.x === foodPos.x && cell.y === foodPos.y));
     localGameState.food = foodPos;
 }
+
+// --- Logika Gry Jednoosobowej (z AI) ---
+function startLocalSinglePlayerGame() {
+    gameMode = 'localSingle';
+    playerRole = 'a'; // Player is always 'a'
+    mainMenuContainer.style.display = 'none';
+    lobbyContainer.style.display = 'none';
+    gameContainer.style.display = 'block';
+
+    if (localGameInterval) clearInterval(localGameInterval);
+
+    localGameState = {
+        snake_a: [{ x: 10, y: 10 }], // Player
+        snake_b: [{ x: GRID_W - 11, y: 10 }], // AI
+        food: {},
+        score_a: 0,
+        score_b: 0,
+        game_over: false,
+    };
+
+    dir_a = { x: 1, y: 0 };
+    dir_b = { x: -1, y: 0 };
+    next_dir_a = { x: 1, y: 0 };
+    next_dir_b = { x: -1, y: 0 };
+
+    infoPanel.textContent = "Gracz: Strzałki | Komputer: AI | 'R' - Restart";
+    generateFood();
+    localGameInterval = setInterval(localSinglePlayerGameLoop, 100);
+}
+
+function getAiNextMove() {
+    const head = localGameState.snake_b[0];
+    const food = localGameState.food;
+    const allObstacles = [...localGameState.snake_a, ...localGameState.snake_b];
+
+    const isCellUnsafe = (cell) => {
+        if (cell.x < 0 || cell.x >= GRID_W || cell.y < 0 || cell.y >= GRID_H) return true;
+        for (const segment of allObstacles) {
+            if (cell.x === segment.x && cell.y === segment.y) return true;
+        }
+        return false;
+    };
+
+    const moves = [
+        { dir: { x: 0, y: -1 }, name: 'up' },
+        { dir: { x: 0, y: 1 }, name: 'down' },
+        { dir: { x: -1, y: 0 }, name: 'left' },
+        { dir: { x: 1, y: 0 }, name: 'right' }
+    ];
+
+    const possibleMoves = moves.filter(move => !(move.dir.x === -dir_b.x && move.dir.y === -dir_b.y));
+
+    let bestMove = null;
+    let minDistance = Infinity;
+
+    for (const move of possibleMoves) {
+        const nextCell = { x: head.x + move.dir.x, y: head.y + move.dir.y };
+        if (!isCellUnsafe(nextCell)) {
+            const distance = Math.abs(nextCell.x - food.x) + Math.abs(nextCell.y - food.y);
+            if (distance < minDistance) {
+                minDistance = distance;
+                bestMove = move.dir;
+            }
+        }
+    }
+
+    if (!bestMove) {
+        for (const move of possibleMoves) {
+            const nextCell = { x: head.x + move.dir.x, y: head.y + move.dir.y };
+            if (!isCellUnsafe(nextCell)) {
+                bestMove = move.dir;
+                break;
+            }
+        }
+    }
+
+    if (!bestMove) bestMove = dir_b;
+
+    next_dir_b = bestMove;
+}
+
+
+function localSinglePlayerGameLoop() {
+    if (localGameState.game_over) return;
+
+    getAiNextMove();
+
+    dir_a = next_dir_a;
+    dir_b = next_dir_b;
+
+    const head_a = { x: localGameState.snake_a[0].x + dir_a.x, y: localGameState.snake_a[0].y + dir_a.y };
+    localGameState.snake_a.unshift(head_a);
+
+    const head_b = { x: localGameState.snake_b[0].x + dir_b.x, y: localGameState.snake_b[0].y + dir_b.y };
+    localGameState.snake_b.unshift(head_b);
+
+    const isCollision = (snake) => {
+        const head = snake[0];
+        if (head.x < 0 || head.x >= GRID_W || head.y < 0 || head.y >= GRID_H) return true;
+        for (let i = 1; i < snake.length; i++) {
+            if (head.x === snake[i].x && head.y === snake[i].y) return true;
+        }
+        return false;
+    };
+
+    for(let i = 0; i < localGameState.snake_b.length; i++){
+        if(head_a.x === localGameState.snake_b[i].x && head_a.y === localGameState.snake_b[i].y) {
+            localGameState.game_over = true;
+        }
+    }
+    for(let i = 0; i < localGameState.snake_a.length; i++){
+        if(head_b.x === localGameState.snake_a[i].x && head_b.y === localGameState.snake_a[i].y) {
+            localGameState.game_over = true;
+        }
+    }
+
+    if (isCollision(localGameState.snake_a) || isCollision(localGameState.snake_b) || localGameState.game_over) {
+        localGameState.game_over = true;
+        clearInterval(localGameInterval);
+        draw(localGameState);
+        return;
+    }
+
+    let ateFoodA = head_a.x === localGameState.food.x && head_a.y === localGameState.food.y;
+    if (ateFoodA) {
+        localGameState.score_a++;
+        generateFood();
+    } else {
+        localGameState.snake_a.pop();
+    }
+
+    let ateFoodB = head_b.x === localGameState.food.x && head_b.y === localGameState.food.y;
+    if (ateFoodB) {
+        localGameState.score_b++;
+        if(!ateFoodA) generateFood();
+    } else {
+        localGameState.snake_b.pop();
+    }
+
+    draw(localGameState);
+}
+
 
 function startLocalTwoPlayerGame() {
     gameMode = 'local';
@@ -244,22 +387,18 @@ function localGameLoop() {
     // --- Kolizje ---
     const isCollision = (snake) => {
         const head = snake[0];
-        // Kolizja ze ścianą
         if (head.x < 0 || head.x >= GRID_W || head.y < 0 || head.y >= GRID_H) return true;
-        // Kolizja z samym sobą
         for (let i = 1; i < snake.length; i++) {
             if (head.x === snake[i].x && head.y === snake[i].y) return true;
         }
         return false;
     };
 
-    // Kolizja Węża A z Wężem B
     for(let i = 0; i < localGameState.snake_b.length; i++){
         if(head_a.x === localGameState.snake_b[i].x && head_a.y === localGameState.snake_b[i].y) {
             localGameState.game_over = true;
         }
     }
-    // Kolizja Węża B z Wężem A
     for(let i = 0; i < localGameState.snake_a.length; i++){
         if(head_b.x === localGameState.snake_a[i].x && head_b.y === localGameState.snake_a[i].y) {
             localGameState.game_over = true;
@@ -286,7 +425,6 @@ function localGameLoop() {
     let ateFoodB = head_b.x === localGameState.food.x && head_b.y === localGameState.food.y;
     if (ateFoodB) {
         localGameState.score_b++;
-        // Jeśli obaj zjedli w tej samej klatce, wygeneruj jedzenie tylko raz
         if(!ateFoodA) generateFood();
     } else {
         localGameState.snake_b.pop();
@@ -358,9 +496,11 @@ socket.on('opponentLeft', () => {
 
 // --- Sterowanie ---
 window.addEventListener('keydown', e => {
+    const key = e.key.toLowerCase();
+
     if (gameMode === 'online' && playerRole) {
         let move = null;
-        switch (e.key.toLowerCase()) {
+        switch (key) {
             case 'arrowup': case 'w': move = { x: 0, y: -1 }; break;
             case 'arrowdown': case 's': move = { x: 0, y: 1 }; break;
             case 'arrowleft': case 'a': move = { x: -1, y: 0 }; break;
@@ -369,19 +509,21 @@ window.addEventListener('keydown', e => {
         }
         if (move) socket.emit('playerMove', move);
     } else if (gameMode === 'local') {
-        const key = e.key.toLowerCase();
-        // Sterowanie Graczem A (Strzałki)
         if (key === 'arrowup' && dir_a.y === 0) next_dir_a = { x: 0, y: -1 };
         else if (key === 'arrowdown' && dir_a.y === 0) next_dir_a = { x: 0, y: 1 };
         else if (key === 'arrowleft' && dir_a.x === 0) next_dir_a = { x: -1, y: 0 };
         else if (key === 'arrowright' && dir_a.x === 0) next_dir_a = { x: 1, y: 0 };
-        // Sterowanie Graczem B (WASD)
         else if (key === 'w' && dir_b.y === 0) next_dir_b = { x: 0, y: -1 };
         else if (key === 's' && dir_b.y === 0) next_dir_b = { x: 0, y: 1 };
         else if (key === 'a' && dir_b.x === 0) next_dir_b = { x: -1, y: 0 };
         else if (key === 'd' && dir_b.x === 0) next_dir_b = { x: 1, y: 0 };
-        // Restart
         else if (key === 'r') startLocalTwoPlayerGame();
+    } else if (gameMode === 'localSingle') {
+        if (key === 'arrowup' && dir_a.y === 0) next_dir_a = { x: 0, y: -1 };
+        else if (key === 'arrowdown' && dir_a.y === 0) next_dir_a = { x: 0, y: 1 };
+        else if (key === 'arrowleft' && dir_a.x === 0) next_dir_a = { x: -1, y: 0 };
+        else if (key === 'arrowright' && dir_a.x === 0) next_dir_a = { x: 1, y: 0 };
+        else if (key === 'r') startLocalSinglePlayerGame();
     }
 });
 
