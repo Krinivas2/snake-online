@@ -1,6 +1,8 @@
 const socket = io();
 
 // Elementy DOM
+const splashScreen = document.getElementById('splashScreen');
+const introVideo = document.getElementById('introVideo');
 const nicknameWrapper = document.getElementById('nicknameWrapper');
 const nicknameInput = document.getElementById('nicknameInput');
 const nicknameBtn = document.getElementById('nicknameBtn');
@@ -34,7 +36,6 @@ let chatHistory = [];
 // Logika wielojęzyczności
 const translations = {
     pl: {
-        // ✅ NOWE TŁUMACZENIA
         enterNicknameTitle: "Podaj swój nick", continueBtn: "Kontynuuj",
         mainTitle: "Wieloosobowy Wąż", lobbyTitle: "Lobby", createRoomTitle: "Stwórz nowy pokój",
         passwordPlaceholder: "Hasło (opcjonalne)", createRoomBtn: "Stwórz Pokój",
@@ -75,8 +76,41 @@ const translations = {
     }
 };
 
-function setLanguage(lang) { /* ... bez zmian, działa z nowym systemem ... */ }
-function setLanguage(lang) { if (!translations[lang]) return; currentLang = lang; localStorage.setItem('snakeLang', lang); document.querySelectorAll('[data-translate-key]').forEach(el => { const key = el.getAttribute('data-translate-key'); const translation = translations[lang][key]; if (translation) { if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') { el.placeholder = translation; } else { el.textContent = translation; } } }); updateRoomListUI(lastRoomsData); renderChat(); if (lastGameState) { draw(lastGameState); } if (gameWrapper.style.display === 'flex') { if (lastGameState && !lastGameState.game_over) { infoPanel.textContent = playerRole === 'a' ? translations[lang].playerAInfo : translations[lang].playerBInfo; } else if (!lastGameState) { infoPanel.textContent = translations[lang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10)); } } document.querySelectorAll('#langSelector span').forEach(span => span.classList.remove('active')); document.getElementById(`lang-${lang}`).classList.add('active'); }
+function setLanguage(lang) {
+    if (!translations[lang]) return;
+    currentLang = lang;
+    localStorage.setItem('snakeLang', lang);
+
+    document.querySelectorAll('[data-translate-key]').forEach(el => {
+        const key = el.getAttribute('data-translate-key');
+        const translation = translations[lang][key];
+        if (translation) {
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                el.placeholder = translation;
+            } else {
+                el.textContent = translation;
+            }
+        }
+    });
+
+    updateRoomListUI(lastRoomsData);
+    renderChat();
+    if (lastGameState) {
+        draw(lastGameState);
+    }
+
+    if (gameWrapper.style.display === 'flex') {
+        if (lastGameState && !lastGameState.game_over) {
+            infoPanel.textContent = playerRole === 'a' ? translations[lang].playerAInfo : translations[lang].playerBInfo;
+        } else if (!lastGameState) {
+             infoPanel.textContent = translations[lang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
+        }
+    }
+
+    document.querySelectorAll('#langSelector span').forEach(span => span.classList.remove('active'));
+    document.getElementById(`lang-${lang}`).classList.add('active');
+}
+
 document.getElementById('lang-pl').addEventListener('click', () => setLanguage('pl'));
 document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
 document.getElementById('lang-no').addEventListener('click', () => setLanguage('no'));
@@ -86,7 +120,21 @@ document.addEventListener('DOMContentLoaded', () => {
     setLanguage(savedLang);
 });
 
-// ✅ NOWOŚĆ: Logika ekranu wyboru nicku
+// Logika ekranu powitalnego (intro video)
+function startApp() {
+    splashScreen.style.display = 'none';
+    nicknameWrapper.style.display = 'block';
+    nicknameInput.focus(); // Ustawia kursor w polu nicku
+}
+
+if (introVideo) {
+    introVideo.addEventListener('ended', startApp);
+    introVideo.addEventListener('error', startApp);
+} else {
+    startApp();
+}
+
+// Logika ekranu wyboru nicku
 nicknameBtn.addEventListener('click', () => {
     const nick = nicknameInput.value.trim();
     if (nick.length >= 2 && nick.length <= 12) {
@@ -104,10 +152,30 @@ nicknameInput.addEventListener('keydown', (e) => {
 });
 
 
-// Funkcje rysujące (bez zmian)
-function drawGrid() { /* ... */ } function drawFood(pos) { /* ... */ } function drawSnakeColored(snake, headColor, bodyColor) { /* ... */ }
+// Funkcje rysujące
+function drawGrid() {
+    ctx.strokeStyle = GRID; ctx.lineWidth = 1;
+    for (let x = 0; x <= GRID_W; x++) { ctx.beginPath(); ctx.moveTo(x * TILE, MARGIN); ctx.lineTo(x * TILE, HEIGHT); ctx.stroke(); }
+    for (let y = 0; y <= GRID_H; y++) { ctx.beginPath(); ctx.moveTo(0, y * TILE + MARGIN); ctx.lineTo(WIDTH, y * TILE + MARGIN); ctx.stroke(); }
+}
+
+function drawFood(pos) {
+    if (!pos || typeof pos.x === 'undefined') return;
+    const { x, y } = gridToPx(pos); const cx = x + TILE / 2; const cy = y + TILE / 2; const radius = TILE / 2 - 1;
+    ctx.fillStyle = 'rgb(200, 40, 40)'; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = 'rgb(255, 100, 100)'; ctx.beginPath(); ctx.arc(cx - radius / 3, cy - radius / 3, radius / 3, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = 'rgb(80, 40, 0)'; ctx.fillRect(cx - 1, cy - radius - 4, 2, 4);
+}
+
+function drawSnakeColored(snake, headColor, bodyColor) {
+    if (!snake) return;
+    snake.forEach((cell, index) => {
+        const { x, y } = gridToPx(cell);
+        ctx.fillStyle = (index === 0) ? headColor : bodyColor;
+        ctx.beginPath(); ctx.roundRect(x, y, TILE, TILE, 3); ctx.fill();
+    });
+}
 const gridToPx = (cell) => ({ x: cell.x * TILE, y: cell.y * TILE + MARGIN });
-function drawGrid() { ctx.strokeStyle = GRID; ctx.lineWidth = 1; for (let x = 0; x <= GRID_W; x++) { ctx.beginPath(); ctx.moveTo(x * TILE, MARGIN); ctx.lineTo(x * TILE, HEIGHT); ctx.stroke(); } for (let y = 0; y <= GRID_H; y++) { ctx.beginPath(); ctx.moveTo(0, y * TILE + MARGIN); ctx.lineTo(WIDTH, y * TILE + MARGIN); ctx.stroke(); } } function drawFood(pos) { if (!pos || typeof pos.x === 'undefined') return; const { x, y } = gridToPx(pos); const cx = x + TILE / 2; const cy = y + TILE / 2; const radius = TILE / 2 - 1; ctx.fillStyle = 'rgb(200, 40, 40)'; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2 * Math.PI); ctx.fill(); ctx.fillStyle = 'rgb(255, 100, 100)'; ctx.beginPath(); ctx.arc(cx - radius / 3, cy - radius / 3, radius / 3, 0, 2 * Math.PI); ctx.fill(); ctx.fillStyle = 'rgb(80, 40, 0)'; ctx.fillRect(cx - 1, cy - radius - 4, 2, 4); } function drawSnakeColored(snake, headColor, bodyColor) { if (!snake) return; snake.forEach((cell, index) => { const { x, y } = gridToPx(cell); ctx.fillStyle = (index === 0) ? headColor : bodyColor; ctx.beginPath(); ctx.roundRect(x, y, TILE, TILE, 3); ctx.fill(); }); }
 
 
 function draw(state) {
@@ -115,10 +183,8 @@ function draw(state) {
     ctx.fillStyle = BG; ctx.fillRect(0, 0, WIDTH, HEIGHT);
     ctx.font = "20px 'Consolas', monospace";
 
-    // ✅ ZMIANA: Wyświetlanie nicków zamiast "Gracz A/B"
     const nickA = state.nick_a || 'Gracz A';
     const nickB = state.nick_b || 'Gracz B';
-    const scoreText = `${nickA}: ${state.score_a}   ${nickB}: ${state.score_b}`;
 
     ctx.fillStyle = 'rgb(90, 220, 110)';
     ctx.fillText(`${nickA}: ${state.score_a}`, 10, 25);
@@ -128,7 +194,8 @@ function draw(state) {
     ctx.fillText(`${nickB}: ${state.score_b}`, WIDTH - 10, 25);
     ctx.textAlign = 'left';
 
-    drawGrid(); drawFood(state.food);
+    drawGrid();
+    drawFood(state.food);
     drawSnakeColored(state.snake_a, 'rgb(90, 220, 110)', 'rgb(50, 180, 90)');
     drawSnakeColored(state.snake_b, 'rgb(90, 140, 220)', 'rgb(50, 90, 180)');
 
@@ -146,23 +213,59 @@ function draw(state) {
 }
 
 // Logika Lobby
-function updateRoomListUI(rooms) { /* ... bez zmian ... */ }
-function updateRoomListUI(rooms) { roomList.innerHTML = ''; if (rooms.length === 0) { roomList.innerHTML = `<p>${translations[currentLang].noRooms}</p>`; return; } rooms.forEach(room => { const roomElement = document.createElement('div'); roomElement.classList.add('room-item'); let lockIcon = room.hasPassword ? '&#128274;' : ''; roomElement.innerHTML = `<span>${translations[currentLang].room} #${room.id.substring(5, 10)} ${lockIcon}</span> <span>${translations[currentLang].players}: ${room.playerCount}/2</span>`; if (room.playerCount < 2) { const joinBtn = document.createElement('button'); joinBtn.textContent = translations[currentLang].joinBtn; joinBtn.onclick = () => { let password = ''; if (room.hasPassword) { password = prompt(translations[currentLang].enterPassword); if (password === null) return; } socket.emit('joinRoom', { roomId: room.id, password: password, nickname: userNickname }); }; roomElement.appendChild(joinBtn); } roomList.appendChild(roomElement); }); }
+function updateRoomListUI(rooms) {
+    roomList.innerHTML = '';
+    if (rooms.length === 0) {
+        roomList.innerHTML = `<p>${translations[currentLang].noRooms}</p>`;
+        return;
+    }
 
-// ✅ ZMIANA: Wysyłamy nick podczas tworzenia pokoju
+    rooms.forEach(room => {
+        const roomElement = document.createElement('div');
+        roomElement.classList.add('room-item');
+
+        let lockIcon = room.hasPassword ? '&#128274;' : '';
+        roomElement.innerHTML = `
+            <span>${translations[currentLang].room} #${room.id.substring(5, 10)} ${lockIcon}</span>
+            <span>${translations[currentLang].players}: ${room.playerCount}/2</span>
+        `;
+
+        if (room.playerCount < 2) {
+            const joinBtn = document.createElement('button');
+            joinBtn.textContent = translations[currentLang].joinBtn;
+            joinBtn.onclick = () => {
+                let password = '';
+                if (room.hasPassword) {
+                    password = prompt(translations[currentLang].enterPassword);
+                    if (password === null) return;
+                }
+                socket.emit('joinRoom', { roomId: room.id, password: password, nickname: userNickname });
+            };
+            roomElement.appendChild(joinBtn);
+        }
+        roomList.appendChild(roomElement);
+    });
+}
+
 createRoomBtn.addEventListener('click', () => {
     const password = passwordInput.value;
     socket.emit('createRoom', { password: password, nickname: userNickname });
 });
 
 // Logika Czat
-chatForm.addEventListener('submit', (e) => { e.preventDefault(); const message = chatInput.value; if (message.trim()) { socket.emit('chatMessage', message); chatInput.value = ''; } });
+chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const message = chatInput.value;
+    if (message.trim()) {
+        socket.emit('chatMessage', message);
+        chatInput.value = '';
+    }
+});
 
 function renderChat() {
     chatMessages.innerHTML = '';
     chatHistory.forEach(data => {
         const p = document.createElement('p');
-        // ✅ ZMIANA: Używamy nicku z obiektu 'data'
         let senderName = data.nickname;
         let senderClass = '';
 
@@ -186,7 +289,11 @@ function renderChat() {
 
 
 // Nasłuchiwanie na Zdarzenia Socket.IO
-socket.on('updateRoomList', (rooms) => { lastRoomsData = rooms; updateRoomListUI(rooms); });
+socket.on('updateRoomList', (rooms) => {
+    lastRoomsData = rooms;
+    updateRoomListUI(rooms);
+});
+
 socket.on('joinedRoom', (data) => {
     playerRole = data.role;
     currentRoomId = data.roomId;
@@ -195,9 +302,15 @@ socket.on('joinedRoom', (data) => {
     lastGameState = null;
     chatHistory = [];
     renderChat();
-    if (playerRole === 'a') { infoPanel.textContent = translations[currentLang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10)); }
+    if (playerRole === 'a') {
+        infoPanel.textContent = translations[currentLang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
+    }
 });
-socket.on('joinError', (message) => { alert(message); });
+
+socket.on('joinError', (message) => {
+    alert(message);
+});
+
 socket.on('gameState', (state) => {
     if (infoPanel.textContent.includes('#') || infoPanel.textContent.startsWith("Oczekiwanie")) {
          if (playerRole === 'a') infoPanel.textContent = translations[currentLang].playerAInfo;
@@ -205,6 +318,35 @@ socket.on('gameState', (state) => {
     }
     draw(state);
 });
-socket.on('chatMessage', (data) => { chatHistory.push(data); renderChat(); });
-socket.on('opponentLeft', () => { alert(translations[currentLang].opponentLeft); window.location.reload(); });
-window.addEventListener('keydown', (e) => { if (!playerRole) return; if (document.activeElement === chatInput) { if (e.key.toLowerCase() === 'r') socket.emit('restartGame'); return; } let move = null; switch (e.key.toLowerCase()) { case 'arrowup': move = { x: 0, y: -1 }; break; case 'arrowdown': move = { x: 0, y: 1 }; break; case 'arrowleft': move = { x: -1, y: 0 }; break; case 'arrowright': move = { x: 1, y: 0 }; break; case 'r': socket.emit('restartGame'); break; } if (move) socket.emit('playerMove', move); });
+
+socket.on('chatMessage', (data) => {
+    chatHistory.push(data);
+    renderChat();
+});
+
+socket.on('opponentLeft', () => {
+    alert(translations[currentLang].opponentLeft);
+    window.location.reload();
+});
+
+// Nasłuchiwanie na klawisze
+window.addEventListener('keydown', (e) => {
+    if (!playerRole) return;
+    if (document.activeElement === chatInput) {
+        if (e.key.toLowerCase() === 'r') {
+            socket.emit('restartGame');
+        }
+        return;
+    }
+    let move = null;
+    switch (e.key.toLowerCase()) {
+        case 'arrowup': move = { x: 0, y: -1 }; break;
+        case 'arrowdown': move = { x: 0, y: 1 }; break;
+        case 'arrowleft': move = { x: -1, y: 0 }; break;
+        case 'arrowright': move = { x: 1, y: 0 }; break;
+        case 'r': socket.emit('restartGame'); break;
+    }
+    if (move) {
+        socket.emit('playerMove', move);
+    }
+});
