@@ -1,57 +1,92 @@
-const express = require('express');
-const http = require('http');
-const socketIo = require('socket.io');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = new Server(server);
 
-// ... (początek pliku i funkcje pomocnicze bez zmian) ...
-const TILE = 12;
-const GRID_W = 56, GRID_H = 48;
-const FPS = 14;
-let rooms = {};
-function log(level, message) { const timestamp = new Date().toISOString(); console.log(`[${timestamp}] [${level}] ${message}`); }
-function randomFreeCell(occupied) { const occupiedSet = new Set(occupied.map(c => `${c.x},${c.y}`)); while (true) { const c = { x: Math.floor(Math.random() * GRID_W), y: Math.floor(Math.random() * GRID_H) }; if (!occupiedSet.has(`${c.x},${c.y}`)) return c; } }
-function isCoordInSnake(coord, snake) { return snake.some(segment => segment.x === coord.x && segment.y === coord.y); }
-function createNewRoomState() { return { id: null, password: null, players: {}, playerSlots: { a: null, b: null }, gameState: { snake_a: [], snake_b: [], food: {}, score_a: 0, score_b: 0, game_over: false, nick_a: null, nick_b: null, }, pendingMoves: { a: [], b: [] }, interval: null }; }
-function resetGame(room) { const start_a = { x: Math.floor(GRID_W / 4), y: Math.floor(GRID_H / 2) }; const start_b = { x: Math.floor(3 * GRID_W / 4), y: Math.floor(GRID_H / 2) }; room.gameState.snake_a = [start_a, { x: start_a.x - 1, y: start_a.y }]; room.gameState.snake_b = [start_b, { x: start_b.x + 1, y: start_a.y }]; room.pendingMoves = { a: [{ x: 1, y: 0 }], b: [{ x: -1, y: 0 }] }; if (room.playerSlots.a) room.players[room.playerSlots.a].lastDir = { x: 1, y: 0 }; if (room.playerSlots.b) room.players[room.playerSlots.b].lastDir = { x: -1, y: 0 }; if (room.playerSlots.a) room.gameState.nick_a = room.players[room.playerSlots.a].nickname; if (room.playerSlots.b) room.gameState.nick_b = room.players[room.playerSlots.b].nickname; room.gameState.score_a = 0; room.gameState.score_b = 0; const occupied = [...room.gameState.snake_a, ...room.gameState.snake_b]; room.gameState.food = randomFreeCell(occupied); room.gameState.game_over = false; io.to(room.id).emit('gameState', room.gameState); }
-function gameTick(roomId) { const room = rooms[roomId]; if (!room || room.gameState.game_over) return; let move_a = room.players[room.playerSlots.a].lastDir; if (room.pendingMoves.a.length > 0) { move_a = room.pendingMoves.a.shift(); room.players[room.playerSlots.a].lastDir = move_a; } let move_b = room.players[room.playerSlots.b].lastDir; if (room.pendingMoves.b.length > 0) { move_b = room.pendingMoves.b.shift(); room.players[room.playerSlots.b].lastDir = move_b; } let head_a = { x: room.gameState.snake_a[0].x + move_a.x, y: room.gameState.snake_a[0].y + move_a.y }; if (head_a.x<0||head_a.x>=GRID_W||head_a.y<0||head_a.y>=GRID_H||isCoordInSnake(head_a,room.gameState.snake_a)||isCoordInSnake(head_a,room.gameState.snake_b)) { room.gameState.game_over = true; } else { room.gameState.snake_a.unshift(head_a); if (head_a.x===room.gameState.food.x && head_a.y===room.gameState.food.y) { room.gameState.score_a++; room.gameState.food = randomFreeCell([...room.gameState.snake_a, ...room.gameState.snake_b]); } else { room.gameState.snake_a.pop(); } } if(room.gameState.game_over) { io.to(roomId).emit('gameState', room.gameState); return; } let head_b = { x: room.gameState.snake_b[0].x + move_b.x, y: room.gameState.snake_b[0].y + move_b.y }; if (head_b.x<0||head_b.x>=GRID_W||head_b.y<0||head_b.y>=GRID_H||isCoordInSnake(head_b,room.gameState.snake_b)||isCoordInSnake(head_b,room.gameState.snake_a)||(head_a.x===head_b.x&&head_a.y===head_b.y)) { room.gameState.game_over = true; } else { room.gameState.snake_b.unshift(head_b); if (head_b.x===room.gameState.food.x && head_b.y===room.gameState.food.y) { room.gameState.score_b++; room.gameState.food = randomFreeCell([...room.gameState.snake_a, ...room.gameState.snake_b]); } else { room.gameState.snake_b.pop(); } } io.to(roomId).emit('gameState', room.gameState); }
-function startGame(roomId) { const room = rooms[roomId]; if (room.interval) clearInterval(room.interval); resetGame(room); room.interval = setInterval(() => gameTick(roomId), 1000 / FPS); log('INFO', `Game started in room ${roomId}`); }
-function getLobbyInfo() { return Object.values(rooms).map(room => ({ id: room.id, playerCount: Object.keys(room.players).length, hasPassword: !!room.password })); }
+const PORT = 3000;
 
+// === SERWER STATIC ===
+app.use(express.static("public"));
 
-// --- GŁÓWNA LOGIKA SOCKET.IO ---
-io.on('connection', (socket) => {
-    // ... (obsługa 'connection', 'createRoom', 'joinRoom', 'chatMessage' bez zmian) ...
-    log('INFO', `New user connected: ${socket.id}`); socket.emit('updateRoomList', getLobbyInfo()); socket.on('createRoom', ({ password, nickname }) => { if (!nickname || nickname.trim().length < 2 || nickname.trim().length > 12) { return socket.emit('joinError', 'Nieprawidłowy nick (2-12 znaków).'); } const roomId = `room-${socket.id}`; const room = createNewRoomState(); room.id = roomId; room.password = password || null; room.playerSlots.a = socket.id; room.players[socket.id] = { role: 'a', lastDir: { x: 1, y: 0 }, nickname: nickname.trim() }; rooms[roomId] = room; socket.join(roomId); socket.roomId = roomId; socket.emit('joinedRoom', { role: 'a', roomId: roomId }); io.emit('updateRoomList', getLobbyInfo()); log('INFO', `User ${nickname} (${socket.id}) created room ${roomId}`); }); socket.on('joinRoom', ({ roomId, password, nickname }) => { if (!nickname || nickname.trim().length < 2 || nickname.trim().length > 12) { return socket.emit('joinError', 'Nieprawidłowy nick (2-12 znaków).'); } const room = rooms[roomId]; if (!room) return socket.emit('joinError', 'Pokój nie istnieje.'); if (Object.keys(room.players).length >= 2) return socket.emit('joinError', 'Pokój jest pełny.'); if (room.password && room.password !== password) return socket.emit('joinError', 'Nieprawidłowe hasło.'); room.playerSlots.b = socket.id; room.players[socket.id] = { role: 'b', lastDir: { x: -1, y: 0 }, nickname: nickname.trim() }; socket.join(roomId); socket.roomId = roomId; const playerANick = room.players[room.playerSlots.a].nickname; socket.emit('joinedRoom', { role: 'b', roomId: roomId }); io.to(roomId).emit('chatMessage', { role: 'system', message: `Gracz ${nickname} dołączył do gry.` }); io.emit('updateRoomList', getLobbyInfo()); log('INFO', `User ${nickname} (${socket.id}) joined room ${roomId} with ${playerANick}`); startGame(roomId); }); socket.on('chatMessage', (message) => { const roomId = socket.roomId; if (!roomId || !rooms[roomId] || !message) return; const room = rooms[roomId]; const player = room.players[socket.id]; if (player) { const sanitizedMessage = String(message).substring(0, 200); io.to(roomId).emit('chatMessage', { role: player.role, nickname: player.nickname, message: sanitizedMessage }); } }); socket.on('playerMove', (move) => {});
+// === DANE O POKOJACH ===
+const rooms = {};
 
-    // ✅ ZMIANA: Logika restartu gry
-    socket.on('restartGame', () => {
+io.on("connection", (socket) => {
+    console.log("Użytkownik podłączony:", socket.id);
+
+    // 🔹 Tworzenie nowego pokoju
+    socket.on("createRoom", () => {
+        const roomId = uuidv4();
+        rooms[roomId] = {
+            players: {},
+            pendingMoves: { a: [], b: [] },
+        };
+        socket.join(roomId);
+        rooms[roomId].players[socket.id] = { role: "a", lastDir: { x: 1, y: 0 } };
+        socket.roomId = roomId;
+
+        socket.emit("roomCreated", { roomId });
+        console.log(`Pokój ${roomId} utworzony przez ${socket.id}`);
+    });
+
+    // 🔹 Dołączanie do pokoju
+    socket.on("joinRoom", (roomId) => {
+        const room = rooms[roomId];
+        if (room && Object.keys(room.players).length < 2) {
+            socket.join(roomId);
+            rooms[roomId].players[socket.id] = { role: "b", lastDir: { x: -1, y: 0 } };
+            socket.roomId = roomId;
+
+            socket.emit("roomJoined", { roomId });
+            io.to(roomId).emit("gameStart", { message: "Gra się zaczyna!" });
+
+            console.log(`Gracz ${socket.id} dołączył do pokoju ${roomId}`);
+        } else {
+            socket.emit("errorMessage", { message: "Pokój jest pełny lub nie istnieje." });
+        }
+    });
+
+    // 🔹 RUCH GRACZA
+    socket.on("playerMove", (move) => {
         const roomId = socket.roomId;
         if (!roomId || !rooms[roomId]) return;
 
         const room = rooms[roomId];
-        const player = room.players[socket.id]; // Sprawdź, czy to legalny gracz
+        const player = room.players[socket.id];
+        if (!player) return;
 
-        // Zezwól na restart, jeśli gra się zakończyła, a żądanie pochodzi od gracza w pokoju
-        if (room.gameState.game_over && player) {
-            const nickname = player.nickname;
-            log('INFO', `Game restarting in room ${roomId}, initiated by ${nickname}`);
-            resetGame(room);
+        const role = player.role; // 'a' albo 'b'
+        const lastDir = player.lastDir;
+
+        // ⛔ Blokada cofania się o 180°
+        if (move.x === -lastDir.x && move.y === -lastDir.y) {
+            return;
         }
+
+        // ➕ Kolejkuj ruch
+        room.pendingMoves[role].push(move);
+        console.log(`Ruch gracza ${role}:`, move);
     });
 
-    socket.on('disconnect', () => {
-    // ... (obsługa 'disconnect' bez zmian) ...
-        const roomId = socket.roomId; if (roomId && rooms[roomId]) { const room = rooms[roomId]; const player = room.players[socket.id]; const nickname = player ? player.nickname : socket.id; log('INFO', `User ${nickname} disconnected from room ${roomId}`); clearInterval(room.interval); io.to(roomId).emit('chatMessage', { role: 'system', message: `Gracz ${nickname} opuścił grę.` }); io.to(roomId).emit('opponentLeft'); delete rooms[roomId]; io.emit('updateRoomList', getLobbyInfo()); log('INFO', `Room ${roomId} closed.`); } else { log('INFO', `User ${socket.id} disconnected (was not in a room)`); }
+    // 🔹 Rozłączenie
+    socket.on("disconnect", () => {
+        const roomId = socket.roomId;
+        if (roomId && rooms[roomId]) {
+            delete rooms[roomId].players[socket.id];
+            if (Object.keys(rooms[roomId].players).length === 0) {
+                delete rooms[roomId];
+                console.log(`Pokój ${roomId} został usunięty (wszyscy wyszli)`);
+            }
+        }
+        console.log("Użytkownik rozłączony:", socket.id);
     });
 });
 
-// Serwowanie plików statycznych
-app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
-app.get('/game.js', (req, res) => res.sendFile(__dirname + '/game.js'));
-app.get('/intro.mp4', (req, res) => res.sendFile(__dirname + '/intro.mp4'));
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => log('INFO', `Server is running on port ${PORT}`));
+// === START SERVERA ===
+server.listen(PORT, () => {
+    console.log(`Serwer działa na http://localhost:${PORT}`);
+});
