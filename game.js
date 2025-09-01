@@ -2,30 +2,108 @@ const socket = io();
 
 // Elementy DOM
 const lobbyContainer = document.getElementById('lobbyContainer');
-const gameContainer = document.getElementById('gameContainer');
+const gameWrapper = document.getElementById('gameWrapper');
 const createRoomBtn = document.getElementById('createRoomBtn');
 const passwordInput = document.getElementById('passwordInput');
 const roomList = document.getElementById('roomList');
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const infoPanel = document.getElementById('infoPanel');
+const chatForm = document.getElementById('chatForm');
+const chatInput = document.getElementById('chatInput');
+const chatMessages = document.getElementById('chatMessages');
 
 // Ustawienia wizualne (bez zmian)
 const TILE = 12; const GRID_W = 56, GRID_H = 48; const MARGIN = 40;
 const WIDTH = GRID_W * TILE; const HEIGHT = GRID_H * TILE + MARGIN;
 canvas.width = WIDTH; canvas.height = HEIGHT;
-
-const BG = 'rgb(18, 18, 18)'; const GRID = 'rgb(30, 30, 30)';
-const TEXT = 'rgb(230, 230, 230)';
+const BG = 'rgb(18, 18, 18)'; const GRID = 'rgb(30, 30, 30)'; const TEXT = 'rgb(230, 230, 230)';
 
 let playerRole = null;
+let currentRoomId = null;
+let currentLang = 'pl';
+
+// ✅ NOWOŚĆ: Logika wielojęzyczności
+const translations = {
+    pl: {
+        mainTitle: "Wieloosobowy Wąż", lobbyTitle: "Lobby", createRoomTitle: "Stwórz nowy pokój",
+        passwordPlaceholder: "Hasło (opcjonalne)", createRoomBtn: "Stwórz Pokój",
+        availableRoomsTitle: "Dostępne Pokoje", noRooms: "Brak dostępnych pokoi. Stwórz własny!",
+        room: "Pokój", players: "Gracze", joinBtn: "Dołącz", enterPassword: "Podaj hasło do pokoju:",
+        waitingForPlayer: "Oczekiwanie na drugiego gracza w pokoju #{roomId}...",
+        playerAInfo: "Gracz A (zielony) | Sterowanie: Strzałki", playerBInfo: "Gracz B (niebieski) | Sterowanie: Strzałki",
+        gameOver: "KONIEC GRY", restartInfo: "Gracz A wciska R, aby zagrać ponownie.",
+        opponentLeft: "Przeciwnik opuścił grę. Zostaniesz przeniesiony do lobby.",
+        chatPlaceholder: "Napisz wiadomość...", chatSendBtn: "Wyślij",
+        playerA: "Gracz A", playerB: "Gracz B", system: "System"
+    },
+    en: {
+        mainTitle: "Multiplayer Snake", lobbyTitle: "Lobby", createRoomTitle: "Create a new room",
+        passwordPlaceholder: "Password (optional)", createRoomBtn: "Create Room",
+        availableRoomsTitle: "Available Rooms", noRooms: "No available rooms. Create your own!",
+        room: "Room", players: "Players", joinBtn: "Join", enterPassword: "Enter room password:",
+        waitingForPlayer: "Waiting for another player in room #{roomId}...",
+        playerAInfo: "Player A (green) | Controls: Arrow keys", playerBInfo: "Player B (blue) | Controls: Arrow keys",
+        gameOver: "GAME OVER", restartInfo: "Player A presses R to play again.",
+        opponentLeft: "The opponent has left the game. You will be returned to the lobby.",
+        chatPlaceholder: "Type a message...", chatSendBtn: "Send",
+        playerA: "Player A", playerB: "Player B", system: "System"
+    },
+    no: {
+        mainTitle: "Flerspiller Slangespill", lobbyTitle: "Lobby", createRoomTitle: "Opprett et nytt rom",
+        passwordPlaceholder: "Passord (valgfritt)", createRoomBtn: "Opprett Rom",
+        availableRoomsTitle: "Tilgjengelige Rom", noRooms: "Ingen tilgjengelige rom. Lag ditt eget!",
+        room: "Rom", players: "Spillere", joinBtn: "Bli med", enterPassword: "Skriv inn rompassord:",
+        waitingForPlayer: "Venter på en annen spiller i rom #{roomId}...",
+        playerAInfo: "Spiller A (grønn) | Kontroller: Piltaster", playerBInfo: "Spiller B (blå) | Kontroller: Piltaster",
+        gameOver: "SPILLET ER OVER", restartInfo: "Spiller A trykker R for å spille igjen.",
+        opponentLeft: "Motstanderen har forlatt spillet. Du blir sendt tilbake til lobbyen.",
+        chatPlaceholder: "Skriv en melding...", chatSendBtn: "Send",
+        playerA: "Spiller A", playerB: "Spiller B", system: "System"
+    }
+};
+
+function setLanguage(lang) {
+    if (!translations[lang]) return;
+    currentLang = lang;
+    localStorage.setItem('snakeLang', lang);
+
+    document.querySelectorAll('[data-translate-key]').forEach(el => {
+        const key = el.getAttribute('data-translate-key');
+        if (translations[lang][key]) {
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                el.placeholder = translations[lang][key];
+            } else {
+                el.textContent = translations[lang][key];
+            }
+        }
+    });
+
+    // Aktualizacja dynamicznych etykiet, które mogły zostać już ustawione
+    if (playerRole === 'a' && currentRoomId) {
+        infoPanel.textContent = translations[lang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
+    }
+
+    document.querySelectorAll('#langSelector span').forEach(span => span.classList.remove('active'));
+    document.getElementById(`lang-${lang}`).classList.add('active');
+}
+
+document.getElementById('lang-pl').addEventListener('click', () => setLanguage('pl'));
+document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
+document.getElementById('lang-no').addEventListener('click', () => setLanguage('no'));
+
+document.addEventListener('DOMContentLoaded', () => {
+    const savedLang = localStorage.getItem('snakeLang') || 'pl';
+    setLanguage(savedLang);
+});
+
 
 // --- Funkcje rysujące (bez zmian) ---
 function drawGrid() { /* ... bez zmian ... */ }
 function drawFood(pos) { /* ... bez zmian ... */ }
 function drawSnakeColored(snake, headColor, bodyColor) { /* ... bez zmian ... */ }
-
-// Uzupełnij skopiowane funkcje rysujące
+const gridToPx = (cell) => ({ x: cell.x * TILE, y: cell.y * TILE + MARGIN });
+// Uzupełnienie funkcji rysujących
 function drawGrid() {
     ctx.strokeStyle = GRID; ctx.lineWidth = 1;
     for (let x = 0; x <= GRID_W; x++) { ctx.beginPath(); ctx.moveTo(x * TILE, MARGIN); ctx.lineTo(x * TILE, HEIGHT); ctx.stroke(); }
@@ -46,13 +124,13 @@ function drawSnakeColored(snake, headColor, bodyColor) {
         ctx.beginPath(); ctx.roundRect(x, y, TILE, TILE, 3); ctx.fill();
     });
 }
-const gridToPx = (cell) => ({ x: cell.x * TILE, y: cell.y * TILE + MARGIN });
 
 
 function draw(state) {
     ctx.fillStyle = BG; ctx.fillRect(0, 0, WIDTH, HEIGHT);
     ctx.fillStyle = TEXT; ctx.font = "22px 'Consolas', monospace";
-    ctx.fillText(`Gracz A: ${state.score_a}   Gracz B: ${state.score_b}`, 10, 25);
+    const scoreText = `${translations[currentLang].playerA}: ${state.score_a}   ${translations[currentLang].playerB}: ${state.score_b}`;
+    ctx.fillText(scoreText, 10, 25);
     drawGrid(); drawFood(state.food);
     drawSnakeColored(state.snake_a, 'rgb(90, 220, 110)', 'rgb(50, 180, 90)');
     drawSnakeColored(state.snake_b, 'rgb(90, 140, 220)', 'rgb(50, 90, 180)');
@@ -60,21 +138,21 @@ function draw(state) {
     if (state.game_over) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
         ctx.fillStyle = TEXT; ctx.textAlign = 'center'; ctx.font = "bold 36px 'Consolas', monospace";
-        ctx.fillText("KONIEC GRY", WIDTH / 2, HEIGHT / 2 - 20);
+        ctx.fillText(translations[currentLang].gameOver, WIDTH / 2, HEIGHT / 2 - 20);
         if(playerRole !== 'spectator') {
             ctx.font = "16px 'Consolas', monospace";
-            ctx.fillText("Gracz A wciska R, aby zagrać ponownie.", WIDTH / 2, HEIGHT / 2 + 20);
+            ctx.fillText(translations[currentLang].restartInfo, WIDTH / 2, HEIGHT / 2 + 20);
         }
         ctx.textAlign = 'left';
     }
 }
 
 
-// --- Nowa Logika Lobby ---
+// --- Logika Lobby ---
 function updateRoomList(rooms) {
-    roomList.innerHTML = ''; // Wyczyść listę
+    roomList.innerHTML = '';
     if (rooms.length === 0) {
-        roomList.innerHTML = '<p>Brak dostępnych pokoi. Stwórz własny!</p>';
+        roomList.innerHTML = `<p>${translations[currentLang].noRooms}</p>`;
         return;
     }
 
@@ -82,26 +160,25 @@ function updateRoomList(rooms) {
         const roomElement = document.createElement('div');
         roomElement.classList.add('room-item');
 
-        let lockIcon = room.hasPassword ? '&#128274;' : ''; // ikona kłódki
+        let lockIcon = room.hasPassword ? '&#128274;' : '';
         roomElement.innerHTML = `
-            <span>Pokój #${room.id.substring(5, 10)} ${lockIcon}</span>
-            <span>Gracze: ${room.playerCount}/2</span>
+            <span>${translations[currentLang].room} #${room.id.substring(5, 10)} ${lockIcon}</span>
+            <span>${translations[currentLang].players}: ${room.playerCount}/2</span>
         `;
 
         if (room.playerCount < 2) {
             const joinBtn = document.createElement('button');
-            joinBtn.textContent = 'Dołącz';
+            joinBtn.textContent = translations[currentLang].joinBtn;
             joinBtn.onclick = () => {
                 let password = '';
                 if (room.hasPassword) {
-                    password = prompt('Podaj hasło do pokoju:');
-                    if (password === null) return; // Anulowano
+                    password = prompt(translations[currentLang].enterPassword);
+                    if (password === null) return;
                 }
                 socket.emit('joinRoom', { roomId: room.id, password: password });
             };
             roomElement.appendChild(joinBtn);
         }
-
         roomList.appendChild(roomElement);
     });
 }
@@ -110,6 +187,37 @@ createRoomBtn.addEventListener('click', () => {
     const password = passwordInput.value;
     socket.emit('createRoom', { password: password });
 });
+
+// ✅ NOWOŚĆ: Logika czatu
+chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const message = chatInput.value;
+    if (message.trim()) {
+        socket.emit('chatMessage', message);
+        chatInput.value = '';
+    }
+});
+
+function addChatMessage({ role, message }) {
+    const p = document.createElement('p');
+    let senderName = '';
+    let senderClass = '';
+
+    if (role === 'a') {
+        senderName = translations[currentLang].playerA;
+        senderClass = 'playerA';
+    } else if (role === 'b') {
+        senderName = translations[currentLang].playerB;
+        senderClass = 'playerB';
+    } else { // system
+        senderName = translations[currentLang].system;
+        senderClass = 'system';
+    }
+
+    p.innerHTML = `<strong class="${senderClass}">${senderName}:</strong> ${message}`;
+    chatMessages.appendChild(p);
+    chatMessages.scrollTop = chatMessages.scrollHeight; // Auto-scroll
+}
 
 
 // --- Nasłuchiwanie na Zdarzenia Socket.IO ---
@@ -120,11 +228,15 @@ socket.on('updateRoomList', (rooms) => {
 
 socket.on('joinedRoom', (data) => {
     playerRole = data.role;
-    lobbyContainer.style.display = 'none';
-    gameContainer.style.display = 'block';
+    currentRoomId = data.roomId; // ✅ ZMIANA: Zapisujemy ID pokoju
 
-    if (role === 'a') infoPanel.textContent = "Jesteś Graczem A (zielony). Oczekiwanie na drugiego gracza...";
-    else if (role === 'b') infoPanel.textContent = "Jesteś Graczem B (niebieski). Gra zaraz się rozpocznie!";
+    lobbyContainer.style.display = 'none';
+    gameWrapper.style.display = 'flex';
+
+    if (playerRole === 'a') {
+        // ✅ ZMIANA: Pokazujemy numer pokoju
+        infoPanel.textContent = translations[currentLang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
+    }
 });
 
 socket.on('joinError', (message) => {
@@ -132,21 +244,32 @@ socket.on('joinError', (message) => {
 });
 
 socket.on('gameState', (state) => {
-    if (state.score_a === 0 && state.score_b === 0 && !state.game_over) {
-         if (playerRole === 'a') infoPanel.textContent = "Gracz A (zielony) | Sterowanie: Strzałki";
-         if (playerRole === 'b') infoPanel.textContent = "Gracz B (niebieski) | Sterowanie: Strzałki";
+    if (infoPanel.textContent.includes('#')) { // Jeśli nadal jest tekst oczekiwania
+         if (playerRole === 'a') infoPanel.textContent = translations[currentLang].playerAInfo;
+         if (playerRole === 'b') infoPanel.textContent = translations[currentLang].playerBInfo;
     }
     draw(state);
 });
 
+// ✅ NOWOŚĆ: Odbieranie wiadomości z czatu
+socket.on('chatMessage', (data) => {
+    addChatMessage(data);
+});
+
 socket.on('opponentLeft', () => {
-    alert('Przeciwnik opuścił grę. Zostaniesz przeniesiony do lobby.');
-    window.location.reload(); // Najprostszy sposób na powrót do lobby
+    alert(translations[currentLang].opponentLeft);
+    window.location.reload();
 });
 
 // Nasłuchiwanie na klawisze (bez zmian)
 window.addEventListener('keydown', e => {
     if (!playerRole) return;
+    // Zapobiegaj sterowaniu wężem podczas pisania na czacie
+    if (document.activeElement === chatInput) {
+        if (e.key.toLowerCase() === 'r') socket.emit('restartGame');
+        return;
+    }
+
     let move = null;
     switch (e.key.toLowerCase()) {
         case 'arrowup': move = { x: 0, y: -1 }; break;
