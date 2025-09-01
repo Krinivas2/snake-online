@@ -17,12 +17,20 @@ const infoPanel = document.getElementById('infoPanel');
 const chatForm = document.getElementById('chatForm');
 const chatInput = document.getElementById('chatInput');
 const chatMessages = document.getElementById('chatMessages');
+const restartBtn = document.getElementById('restartBtn');
 
 // Ustawienia wizualne
-const TILE = 12; const GRID_W = 56; const GRID_H = 48; const MARGIN = 40;
-const WIDTH = GRID_W * TILE; const HEIGHT = GRID_H * TILE + MARGIN;
-canvas.width = WIDTH; canvas.height = HEIGHT;
-const BG = 'rgb(18, 18, 18)'; const GRID = 'rgb(30, 30, 30)'; const TEXT = 'rgb(230, 230, 230)';
+const TILE = 12;
+const GRID_W = 56;
+const GRID_H = 48;
+const MARGIN = 40;
+const WIDTH = GRID_W * TILE;
+const HEIGHT = GRID_H * TILE + MARGIN;
+canvas.width = WIDTH;
+canvas.height = HEIGHT;
+const BG = 'rgb(18, 18, 18)';
+const GRID = 'rgb(30, 30, 30)';
+const TEXT = 'rgb(230, 230, 230)';
 
 // Zmienne stanu
 let userNickname = '';
@@ -36,42 +44,78 @@ let chatHistory = [];
 // Logika wielojęzyczności
 const translations = {
     pl: {
-        enterNicknameTitle: "Podaj swój nick", continueBtn: "Kontynuuj",
-        mainTitle: "Wieloosobowy Wąż", lobbyTitle: "Lobby", createRoomTitle: "Stwórz nowy pokój",
-        passwordPlaceholder: "Hasło (opcjonalne)", createRoomBtn: "Stwórz Pokój",
-        availableRoomsTitle: "Dostępne Pokoje", noRooms: "Brak dostępnych pokoi. Stwórz własny!",
-        room: "Pokój", players: "Gracze", joinBtn: "Dołącz", enterPassword: "Podaj hasło do pokoju:",
+        restartBtn: "Zagraj ponownie",
+        restartInfo: "Kliknij przycisk poniżej, aby zagrać ponownie.",
+        enterNicknameTitle: "Podaj swój nick",
+        continueBtn: "Kontynuuj",
+        mainTitle: "Wieloosobowy Wąż",
+        lobbyTitle: "Lobby",
+        createRoomTitle: "Stwórz nowy pokój",
+        passwordPlaceholder: "Hasło (opcjonalne)",
+        createRoomBtn: "Stwórz Pokój",
+        availableRoomsTitle: "Dostępne Pokoje",
+        noRooms: "Brak dostępnych pokoi. Stwórz własny!",
+        room: "Pokój",
+        players: "Gracze",
+        joinBtn: "Dołącz",
+        enterPassword: "Podaj hasło do pokoju:",
         waitingForPlayer: "Oczekiwanie na drugiego gracza w pokoju #{roomId}...",
-        playerAInfo: "Sterowanie: Strzałki", playerBInfo: "Sterowanie: Strzałki",
-        gameOver: "KONIEC GRY", restartInfo: "{nickname} wciska R, aby zagrać ponownie.",
+        playerAInfo: "Sterowanie: Strzałki",
+        playerBInfo: "Sterowanie: Strzałki",
+        gameOver: "KONIEC GRY",
         opponentLeft: "Przeciwnik opuścił grę. Zostaniesz przeniesiony do lobby.",
-        chatPlaceholder: "Napisz wiadomość...", chatSendBtn: "Wyślij",
+        chatPlaceholder: "Napisz wiadomość...",
+        chatSendBtn: "Wyślij",
         system: "System"
     },
     en: {
-        enterNicknameTitle: "Enter your nickname", continueBtn: "Continue",
-        mainTitle: "Multiplayer Snake", lobbyTitle: "Lobby", createRoomTitle: "Create a new room",
-        passwordPlaceholder: "Password (optional)", createRoomBtn: "Create Room",
-        availableRoomsTitle: "Available Rooms", noRooms: "No available rooms. Create your own!",
-        room: "Room", players: "Players", joinBtn: "Join", enterPassword: "Enter room password:",
+        restartBtn: "Play Again",
+        restartInfo: "Click the button below to play again.",
+        enterNicknameTitle: "Enter your nickname",
+        continueBtn: "Continue",
+        mainTitle: "Multiplayer Snake",
+        lobbyTitle: "Lobby",
+        createRoomTitle: "Create a new room",
+        passwordPlaceholder: "Password (optional)",
+        createRoomBtn: "Create Room",
+        availableRoomsTitle: "Available Rooms",
+        noRooms: "No available rooms. Create your own!",
+        room: "Room",
+        players: "Players",
+        joinBtn: "Join",
+        enterPassword: "Enter room password:",
         waitingForPlayer: "Waiting for another player in room #{roomId}...",
-        playerAInfo: "Controls: Arrow keys", playerBInfo: "Controls: Arrow keys",
-        gameOver: "GAME OVER", restartInfo: "{nickname} presses R to play again.",
+        playerAInfo: "Controls: Arrow keys",
+        playerBInfo: "Controls: Arrow keys",
+        gameOver: "GAME OVER",
         opponentLeft: "The opponent has left the game. You will be returned to the lobby.",
-        chatPlaceholder: "Type a message...", chatSendBtn: "Send",
+        chatPlaceholder: "Type a message...",
+        chatSendBtn: "Send",
         system: "System"
     },
     no: {
-        enterNicknameTitle: "Skriv inn kallenavnet ditt", continueBtn: "Fortsett",
-        mainTitle: "Flerspiller Slangespill", lobbyTitle: "Lobby", createRoomTitle: "Opprett et nytt rom",
-        passwordPlaceholder: "Passord (valgfritt)", createRoomBtn: "Opprett Rom",
-        availableRoomsTitle: "Tilgjengelige Rom", noRooms: "Ingen tilgjengelige rom. Lag ditt eget!",
-        room: "Rom", players: "Spillere", joinBtn: "Bli med", enterPassword: "Skriv inn rompassord:",
+        restartBtn: "Spill igjen",
+        restartInfo: "Klikk på knappen nedenfor for å spille igjen.",
+        enterNicknameTitle: "Skriv inn kallenavnet ditt",
+        continueBtn: "Fortsett",
+        mainTitle: "Flerspiller Slangespill",
+        lobbyTitle: "Lobby",
+        createRoomTitle: "Opprett et nytt rom",
+        passwordPlaceholder: "Passord (valgfritt)",
+        createRoomBtn: "Opprett Rom",
+        availableRoomsTitle: "Tilgjengelige Rom",
+        noRooms: "Ingen tilgjengelige rom. Lag ditt eget!",
+        room: "Rom",
+        players: "Spillere",
+        joinBtn: "Bli med",
+        enterPassword: "Skriv inn rompassord:",
         waitingForPlayer: "Venter på en annen spiller i rom #{roomId}...",
-        playerAInfo: "Kontroller: Piltaster", playerBInfo: "Kontroller: Piltaster",
-        gameOver: "SPILLET ER OVER", restartInfo: "{nickname} trykker R for å spille igjen.",
+        playerAInfo: "Kontroller: Piltaster",
+        playerBInfo: "Kontroller: Piltaster",
+        gameOver: "SPILLET ER OVER",
         opponentLeft: "Motstanderen har forlatt spillet. Du blir sendt tilbake til lobbyen.",
-        chatPlaceholder: "Skriv en melding...", chatSendBtn: "Send",
+        chatPlaceholder: "Skriv en melding...",
+        chatSendBtn: "Send",
         system: "System"
     }
 };
@@ -99,11 +143,11 @@ function setLanguage(lang) {
         draw(lastGameState);
     }
 
-    if (gameWrapper.style.display === 'flex') {
+    if (gameWrapper.style.display === 'flex' || gameWrapper.style.display === 'block') {
         if (lastGameState && !lastGameState.game_over) {
             infoPanel.textContent = playerRole === 'a' ? translations[lang].playerAInfo : translations[lang].playerBInfo;
         } else if (!lastGameState) {
-             infoPanel.textContent = translations[lang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
+            infoPanel.textContent = translations[lang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
         }
     }
 
@@ -124,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function startApp() {
     splashScreen.style.display = 'none';
     nicknameWrapper.style.display = 'block';
-    nicknameInput.focus(); // Ustawia kursor w polu nicku
+    nicknameInput.focus();
 }
 
 if (introVideo) {
@@ -151,36 +195,74 @@ nicknameInput.addEventListener('keydown', (e) => {
     }
 });
 
+// Listener dla przycisku restartu
+restartBtn.addEventListener('click', () => {
+    socket.emit('restartGame');
+});
+
 
 // Funkcje rysujące
 function drawGrid() {
-    ctx.strokeStyle = GRID; ctx.lineWidth = 1;
-    for (let x = 0; x <= GRID_W; x++) { ctx.beginPath(); ctx.moveTo(x * TILE, MARGIN); ctx.lineTo(x * TILE, HEIGHT); ctx.stroke(); }
-    for (let y = 0; y <= GRID_H; y++) { ctx.beginPath(); ctx.moveTo(0, y * TILE + MARGIN); ctx.lineTo(WIDTH, y * TILE + MARGIN); ctx.stroke(); }
+    ctx.strokeStyle = GRID;
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= GRID_W; x++) {
+        ctx.beginPath();
+        ctx.moveTo(x * TILE, MARGIN);
+        ctx.lineTo(x * TILE, HEIGHT);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= GRID_H; y++) {
+        ctx.beginPath();
+        ctx.moveTo(0, y * TILE + MARGIN);
+        ctx.lineTo(WIDTH, y * TILE + MARGIN);
+        ctx.stroke();
+    }
 }
 
 function drawFood(pos) {
     if (!pos || typeof pos.x === 'undefined') return;
-    const { x, y } = gridToPx(pos); const cx = x + TILE / 2; const cy = y + TILE / 2; const radius = TILE / 2 - 1;
-    ctx.fillStyle = 'rgb(200, 40, 40)'; ctx.beginPath(); ctx.arc(cx, cy, radius, 0, 2 * Math.PI); ctx.fill();
-    ctx.fillStyle = 'rgb(255, 100, 100)'; ctx.beginPath(); ctx.arc(cx - radius / 3, cy - radius / 3, radius / 3, 0, 2 * Math.PI); ctx.fill();
-    ctx.fillStyle = 'rgb(80, 40, 0)'; ctx.fillRect(cx - 1, cy - radius - 4, 2, 4);
+    const {
+        x,
+        y
+    } = gridToPx(pos);
+    const cx = x + TILE / 2;
+    const cy = y + TILE / 2;
+    const radius = TILE / 2 - 1;
+    ctx.fillStyle = 'rgb(200, 40, 40)';
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = 'rgb(255, 100, 100)';
+    ctx.beginPath();
+    ctx.arc(cx - radius / 3, cy - radius / 3, radius / 3, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.fillStyle = 'rgb(80, 40, 0)';
+    ctx.fillRect(cx - 1, cy - radius - 4, 2, 4);
 }
 
 function drawSnakeColored(snake, headColor, bodyColor) {
     if (!snake) return;
     snake.forEach((cell, index) => {
-        const { x, y } = gridToPx(cell);
+        const {
+            x,
+            y
+        } = gridToPx(cell);
         ctx.fillStyle = (index === 0) ? headColor : bodyColor;
-        ctx.beginPath(); ctx.roundRect(x, y, TILE, TILE, 3); ctx.fill();
+        ctx.beginPath();
+        ctx.roundRect(x, y, TILE, TILE, 3);
+        ctx.fill();
     });
 }
-const gridToPx = (cell) => ({ x: cell.x * TILE, y: cell.y * TILE + MARGIN });
+const gridToPx = (cell) => ({
+    x: cell.x * TILE,
+    y: cell.y * TILE + MARGIN
+});
 
 
 function draw(state) {
     lastGameState = state;
-    ctx.fillStyle = BG; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, WIDTH, HEIGHT);
     ctx.font = "20px 'Consolas', monospace";
 
     const nickA = state.nick_a || 'Gracz A';
@@ -200,15 +282,18 @@ function draw(state) {
     drawSnakeColored(state.snake_b, 'rgb(90, 140, 220)', 'rgb(50, 90, 180)');
 
     if (state.game_over) {
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-        ctx.fillStyle = TEXT; ctx.textAlign = 'center'; ctx.font = "bold 36px 'Consolas', monospace";
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        ctx.fillStyle = TEXT;
+        ctx.textAlign = 'center';
+        ctx.font = "bold 36px 'Consolas', monospace";
         ctx.fillText(translations[currentLang].gameOver, WIDTH / 2, HEIGHT / 2 - 20);
-        if(playerRole !== 'spectator') {
-            ctx.font = "16px 'Consolas', monospace";
-            const restartText = translations[currentLang].restartInfo.replace('{nickname}', nickA);
-            ctx.fillText(restartText, WIDTH / 2, HEIGHT / 2 + 20);
-        }
+
+        ctx.font = "16px 'Consolas', monospace";
+        ctx.fillText(translations[currentLang].restartInfo, WIDTH / 2, HEIGHT / 2 + 20);
+
         ctx.textAlign = 'left';
+        restartBtn.style.display = 'block';
     }
 }
 
@@ -239,7 +324,11 @@ function updateRoomListUI(rooms) {
                     password = prompt(translations[currentLang].enterPassword);
                     if (password === null) return;
                 }
-                socket.emit('joinRoom', { roomId: room.id, password: password, nickname: userNickname });
+                socket.emit('joinRoom', {
+                    roomId: room.id,
+                    password: password,
+                    nickname: userNickname
+                });
             };
             roomElement.appendChild(joinBtn);
         }
@@ -249,7 +338,10 @@ function updateRoomListUI(rooms) {
 
 createRoomBtn.addEventListener('click', () => {
     const password = passwordInput.value;
-    socket.emit('createRoom', { password: password, nickname: userNickname });
+    socket.emit('createRoom', {
+        password: password,
+        nickname: userNickname
+    });
 });
 
 // Logika Czat
@@ -273,7 +365,7 @@ function renderChat() {
             senderName = translations[currentLang].system;
             senderClass = 'system';
         } else {
-             senderClass = data.role === 'a' ? 'playerA' : 'playerB';
+            senderClass = data.role === 'a' ? 'playerA' : 'playerB';
         }
 
         const strong = document.createElement('strong');
@@ -302,6 +394,7 @@ socket.on('joinedRoom', (data) => {
     lastGameState = null;
     chatHistory = [];
     renderChat();
+    restartBtn.style.display = 'none';
     if (playerRole === 'a') {
         infoPanel.textContent = translations[currentLang].waitingForPlayer.replace('{roomId}', currentRoomId.substring(5, 10));
     }
@@ -312,9 +405,12 @@ socket.on('joinError', (message) => {
 });
 
 socket.on('gameState', (state) => {
+    if (!state.game_over) {
+        restartBtn.style.display = 'none';
+    }
     if (infoPanel.textContent.includes('#') || infoPanel.textContent.startsWith("Oczekiwanie")) {
-         if (playerRole === 'a') infoPanel.textContent = translations[currentLang].playerAInfo;
-         if (playerRole === 'b') infoPanel.textContent = translations[currentLang].playerBInfo;
+        if (playerRole === 'a') infoPanel.textContent = translations[currentLang].playerAInfo;
+        if (playerRole === 'b') infoPanel.textContent = translations[currentLang].playerBInfo;
     }
     draw(state);
 });
@@ -333,18 +429,34 @@ socket.on('opponentLeft', () => {
 window.addEventListener('keydown', (e) => {
     if (!playerRole) return;
     if (document.activeElement === chatInput) {
-        if (e.key.toLowerCase() === 'r') {
-            socket.emit('restartGame');
-        }
         return;
     }
     let move = null;
     switch (e.key.toLowerCase()) {
-        case 'arrowup': move = { x: 0, y: -1 }; break;
-        case 'arrowdown': move = { x: 0, y: 1 }; break;
-        case 'arrowleft': move = { x: -1, y: 0 }; break;
-        case 'arrowright': move = { x: 1, y: 0 }; break;
-        case 'r': socket.emit('restartGame'); break;
+        case 'arrowup':
+            move = {
+                x: 0,
+                y: -1
+            };
+            break;
+        case 'arrowdown':
+            move = {
+                x: 0,
+                y: 1
+            };
+            break;
+        case 'arrowleft':
+            move = {
+                x: -1,
+                y: 0
+            };
+            break;
+        case 'arrowright':
+            move = {
+                x: 1,
+                y: 0
+            };
+            break;
     }
     if (move) {
         socket.emit('playerMove', move);
