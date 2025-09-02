@@ -606,6 +606,37 @@ function initializeBrowserInfoPanel() {
     const screenRes = `${window.screen.width}x${window.screen.height}`;
     const viewportRes = `${window.innerWidth}x${window.innerHeight}`;
 
+    const browserInfo = {
+        browser: browserName,
+        os: os,
+        language: language,
+        screenResolution: screenRes,
+        viewport: viewportRes
+    };
+    socket.emit('clientBrowserInfo', browserInfo);
+
+
+    infoContainer.innerHTML = `
+        <h3 style="margin: 0 0 8px 0; font-size: 14px; color: white;">ℹ️ Info</h3>
+        <ul style="list-style-type: none; padding: 0; margin: 0; line-height: 1.6;">
+            <li><strong>Przeglądarka:</strong> ${browserName}</li>
+            <li><strong>System:</strong> ${os}</li>
+            <li><strong>Język:</strong> ${language}</li>
+            <li><strong>Rozdzielczość Ekr.:</strong> ${screenRes}</li>
+            <li id="viewport-info"><strong>Rozmiar Okna:</strong> ${viewportRes}</li>
+        </ul>
+    `;
+
+    document.body.appendChild(infoContainer);
+
+    window.addEventListener('resize', () => {
+        const newViewportRes = `${window.innerWidth}x${window.innerHeight}`;
+        const viewportElement = document.getElementById('viewport-info');
+        if (viewportElement) {
+            viewportElement.innerHTML = `<strong>Rozmiar Okna:</strong> ${newViewportRes}`;
+        }
+    });
+
     // 4. Wypełnienie kontenera danymi
     infoContainer.innerHTML = `
         <h3 style="margin: 0 0 8px 0; font-size: 14px; color: white;">ℹ️ Info</h3>

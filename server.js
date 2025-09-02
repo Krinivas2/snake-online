@@ -134,6 +134,12 @@ io.on('connection', (socket) => {
     const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
     console.log(`New user connected: ${socket.id} from IP: ${ip}`);
 
+    socket.on('clientBrowserInfo', (info) => {
+        // Logujemy otrzymane informacje w konsoli serwera
+        console.log(`[Info] Client ${socket.id} (IP: ${ip}) provided browser data:`);
+        console.log(info);
+    });
+
     socket.on('registerUser', (username) => {
         if (!username || username.length < 3) {
             return socket.emit('registerError', 'Nazwa użytkownika musi mieć co najmniej 3 znaki.');
