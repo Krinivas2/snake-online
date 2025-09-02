@@ -17,6 +17,10 @@ let playerRole = null;
 let localGameState = {};
 let localGameInterval = null;
 let dir_a, dir_b, next_dir_a, next_dir_b;
+// NOWOŚĆ: Zmienne do obsługi licznika czasu
+let startTime = 0;
+let gameEndTime = 0;
+
 
 // --- Logika Menu Głównego ---
 function initializeMainMenu() {
@@ -168,8 +172,26 @@ function draw(state) {
     ctx.fillRect(0, 0, WIDTH, HEIGHT);
     ctx.fillStyle = TEXT;
     ctx.font = "22px 'Consolas', monospace";
+
+    // Wyświetlanie wyników
     const scoreText = (gameMode === 'localSingle') ? `Gracz: ${state.score_a}   AI: ${state.score_b}` : `Gracz A: ${state.score_a}   Gracz B: ${state.score_b}`;
     ctx.fillText(scoreText, 10, 25);
+
+    // NOWOŚĆ: Rysowanie licznika czasu
+    let displayTime = 0;
+    if (startTime > 0) {
+        // Jeśli gra się zakończyła, pokaż zamrożony czas, w przeciwnym razie aktualizuj na bieżąco
+        displayTime = (gameEndTime > 0) ? (gameEndTime - startTime) : (Date.now() - startTime);
+    }
+    const totalSeconds = Math.floor(displayTime / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const timeString = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+    ctx.textAlign = 'center';
+    ctx.fillText(`Czas: ${timeString}`, WIDTH / 2, 25);
+    ctx.textAlign = 'left'; // Zresetuj wyrównanie tekstu
+
     drawGrid();
     drawFood(state.food);
     drawSnakeColored(state.snake_a, 'rgb(90, 220, 110)', 'rgb(50, 180, 90)');
@@ -224,6 +246,10 @@ function startLocalSinglePlayerGame() {
     dir_b = { x: -1, y: 0 };
     next_dir_a = { x: 1, y: 0 };
     next_dir_b = { x: -1, y: 0 };
+
+    // NOWOŚĆ: Resetowanie i uruchamianie licznika czasu
+    startTime = Date.now();
+    gameEndTime = 0;
 
     infoPanel.textContent = "Gracz: Strzałki | Komputer: AI | 'R' - Restart";
     generateFood();
@@ -318,6 +344,8 @@ function localSinglePlayerGameLoop() {
 
     if (isCollision(localGameState.snake_a) || isCollision(localGameState.snake_b) || localGameState.game_over) {
         localGameState.game_over = true;
+        // NOWOŚĆ: Zapisz czas zakończenia gry, jeśli jeszcze nie został zapisany
+        if (!gameEndTime) gameEndTime = Date.now();
         clearInterval(localGameInterval);
         draw(localGameState);
         return;
@@ -366,6 +394,10 @@ function startLocalTwoPlayerGame() {
     next_dir_a = { x: 1, y: 0 };
     next_dir_b = { x: -1, y: 0 };
 
+    // NOWOŚĆ: Resetowanie i uruchamianie licznika czasu
+    startTime = Date.now();
+    gameEndTime = 0;
+
     infoPanel.textContent = "Gracz A: Strzałki | Gracz B: WASD | 'R' - Restart";
     generateFood();
     localGameInterval = setInterval(localGameLoop, 100);
@@ -408,6 +440,8 @@ function localGameLoop() {
 
     if (isCollision(localGameState.snake_a) || isCollision(localGameState.snake_b) || localGameState.game_over) {
         localGameState.game_over = true;
+        // NOWOŚĆ: Zapisz czas zakończenia gry, jeśli jeszcze nie został zapisany
+        if (!gameEndTime) gameEndTime = Date.now();
         clearInterval(localGameInterval);
         draw(localGameState);
         return;
@@ -478,14 +512,27 @@ socket.on('joinedRoom', (data) => {
     playerRole = data.role;
     lobbyContainer.style.display = 'none';
     gameContainer.style.display = 'block';
+    // NOWOŚĆ: Zeruj timery po dołączeniu do pokoju. Zostaną uruchomione przy pierwszym stanie gry.
+    startTime = 0;
+    gameEndTime = 0;
     if (data.role === 'a') infoPanel.textContent = "Jesteś Graczem A (zielony). Oczekiwanie na drugiego gracza...";
     else if (data.role === 'b') infoPanel.textContent = "Jesteś Graczem B (niebieski). Gra zaraz się rozpocznie!";
 });
 socket.on('joinError', (message) => alert(message));
 socket.on('gameState', (state) => {
+    // NOWOŚĆ: Uruchom timer przy pierwszym "updatecie" od serwera (gdy gra faktycznie się zaczyna)
+    if (startTime === 0 && !state.game_over) {
+        startTime = Date.now();
+    }
+
     if (playerRole && state.score_a === 0 && state.score_b === 0 && !state.game_over) {
         if (playerRole === 'a') infoPanel.textContent = "Gracz A (zielony) | Sterowanie: Strzałki lub WASD";
         if (playerRole === 'b') infoPanel.textContent = "Gracz B (niebieski) | Sterowanie: Strzałki lub WASD";
+    }
+
+    // NOWOŚĆ: Zatrzymaj timer, gdy serwer ogłosi koniec gry
+    if (state.game_over && !gameEndTime) {
+        gameEndTime = Date.now();
     }
     draw(state);
 });
@@ -505,7 +552,12 @@ window.addEventListener('keydown', e => {
             case 'arrowdown': case 's': move = { x: 0, y: 1 }; break;
             case 'arrowleft': case 'a': move = { x: -1, y: 0 }; break;
             case 'arrowright': case 'd': move = { x: 1, y: 0 }; break;
-            case 'r': socket.emit('restartGame'); break;
+            case 'r':
+                socket.emit('restartGame');
+                // NOWOŚĆ: Resetuj timery po wysłaniu prośby o restart
+                startTime = 0;
+                gameEndTime = 0;
+                break;
         }
         if (move) socket.emit('playerMove', move);
     } else if (gameMode === 'local') {
@@ -526,4 +578,3 @@ window.addEventListener('keydown', e => {
         else if (key === 'r') startLocalSinglePlayerGame();
     }
 });
-
