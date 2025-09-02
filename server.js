@@ -1,6 +1,7 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const geoip = require('geoip-lite'); // NOWE: Import biblioteki do geolokalizacji
 
 const app = express();
 const server = http.createServer(app);
@@ -12,7 +13,6 @@ const GRID_W = 56, GRID_H = 48;
 const FPS = 14;
 
 let rooms = {};
-// ZMIANA: Obiekt użytkowników będzie teraz przechowywał również IP
 let users = {}; // Klucz: socket.id, Wartość: { username, ip }
 
 // --- Funkcje pomocnicze dla gry (bez zmian) ---
@@ -28,9 +28,7 @@ function isCoordInSnake(coord, snake) {
     return snake.some(segment => segment.x === coord.x && segment.y === coord.y);
 }
 
-// --- Logika Gry dla Konkretnego Pokoju (bez zmian w tej sekcji) ---
-// createNewRoomState, resetGame, gameTick, startGame, getLobbyInfo
-// ... (cała logika gry z poprzedniej odpowiedzi pozostaje taka sama) ...
+// --- Logika Gry dla Konkretnego Pokoju (bez zmian) ---
 function createNewRoomState() {
     return {
         players: {},
@@ -130,16 +128,21 @@ function getLobbyInfo() {
 
 // --- GŁÓWNA LOGIKA SOCKET.IO ---
 io.on('connection', (socket) => {
-    // NOWE: Pobieramy adres IP zaraz po połączeniu
+    // Pobieramy adres IP zaraz po połączeniu
     const ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
-    console.log(`New user connected: ${socket.id} from IP: ${ip}`);
+
+    // NOWE: Geolokalizacja na podstawie IP
+    const geo = geoip.lookup(ip);
+    const location = geo ? `${geo.city}, ${geo.country}` : 'Lokalizacja nieznana (lokalny IP)';
+
+    // ZMIANA: Dodajemy geolokalizację do logu połączenia
+    console.log(`New user connected: ${socket.id} from IP: ${ip} (${location})`);
 
     socket.on('registerUser', (username) => {
         if (!username || username.length < 3) {
             return socket.emit('registerError', 'Nazwa użytkownika musi mieć co najmniej 3 znaki.');
         }
 
-        // ZMIANA: Sprawdzamy, czy nazwa użytkownika LUB IP są już zajęte
         const isUsernameTaken = Object.values(users).some(user => user.username === username);
         const isIpInUse = Object.values(users).some(user => user.ip === ip);
 
@@ -147,14 +150,12 @@ io.on('connection', (socket) => {
             return socket.emit('registerError', 'Ta nazwa użytkownika jest już zajęta.');
         }
 
-        // NOWE: Dodatkowa walidacja adresu IP
         if (isIpInUse) {
             return socket.emit('registerError', 'Ten adres IP jest już używany przez innego gracza.');
         }
 
-        // Rejestracja pomyślna
-        console.log(`User ${socket.id} (IP: ${ip}) registered as ${username}`);
-        // ZMIANA: Zapisujemy również IP użytkownika
+        // ZMIANA: Dodajemy geolokalizację do logu rejestracji
+        console.log(`User ${socket.id} (IP: ${ip}, ${location}) registered as ${username}`);
         users[socket.id] = { username, ip };
         socket.username = username;
 
@@ -162,9 +163,7 @@ io.on('connection', (socket) => {
         socket.emit('updateRoomList', getLobbyInfo());
     });
 
-    // Poniższe handlery ('createRoom', 'joinRoom', etc.) pozostają bez zmian,
-    // ponieważ korzystają z `socket.username`, które jest ustawiane po pomyślnej walidacji.
-    // ...
+    // ... reszta handlerów bez zmian
     socket.on('createRoom', ({ password }) => {
         if (!socket.username) return;
         const roomId = `room-${socket.id}`;
@@ -178,7 +177,8 @@ io.on('connection', (socket) => {
         socket.roomId = roomId;
         socket.emit('joinedRoom', { role: 'a', roomId: roomId });
         io.emit('updateRoomList', getLobbyInfo());
-        console.log(`User ${socket.username} created room ${roomId}`);
+        // ZMIANA: Dodajemy geolokalizację do logu tworzenia pokoju
+        console.log(`User ${socket.username} (${location}) created room ${roomId}`);
     });
 
     socket.on('joinRoom', ({ roomId, password }) => {
@@ -193,7 +193,8 @@ io.on('connection', (socket) => {
         socket.roomId = roomId;
         socket.emit('joinedRoom', { role: 'b', roomId: roomId });
         io.emit('updateRoomList', getLobbyInfo());
-        console.log(`User ${socket.username} joined room ${roomId}`);
+        // ZMIANA: Dodajemy geolokalizację do logu dołączania do pokoju
+        console.log(`User ${socket.username} (${location}) joined room ${roomId}`);
         startGame(roomId);
     });
 
@@ -224,8 +225,6 @@ io.on('connection', (socket) => {
 
 
     socket.on('disconnect', () => {
-        // Logika rozłączenia nie wymaga zmian, ponieważ usunięcie wpisu z `users`
-        // automatycznie "zwalnia" zarówno nazwę użytkownika, jak i adres IP.
         console.log(`User disconnected: ${socket.id}`);
         const username = socket.username;
         if (username) {
