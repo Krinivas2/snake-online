@@ -183,6 +183,15 @@ function draw(state) {
     ctx.fillText(`Czas: ${minutes}:${seconds}`, WIDTH - 5, 25);
     ctx.textAlign = 'left'; // Resetowanie wyrównania
 
+    // Znak wodny
+    ctx.save();
+    ctx.font = "bold 60px 'Consolas', monospace";
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText("Serious Seris", WIDTH / 2, HEIGHT / 2 + MARGIN / 2);
+    ctx.restore();
+
     drawGrid();
     drawFood(state.food);
     drawSnakeColored(state.snake_a, 'rgb(90, 220, 110)', 'rgb(50, 180, 90)');
