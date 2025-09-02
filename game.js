@@ -16,11 +16,9 @@ let gameMode = 'menu'; // 'menu', 'online', 'local', 'localSingle'
 let playerRole = null;
 let localGameState = {};
 let localGameInterval = null;
+let gameTimerInterval = null; // Interwał dla licznika czasu
+let elapsedTime = 0; // Czas gry w sekundach
 let dir_a, dir_b, next_dir_a, next_dir_b;
-// NOWOŚĆ: Zmienne do obsługi licznika czasu
-let startTime = 0;
-let gameEndTime = 0;
-
 
 // --- Logika Menu Głównego ---
 function initializeMainMenu() {
@@ -173,24 +171,17 @@ function draw(state) {
     ctx.fillStyle = TEXT;
     ctx.font = "22px 'Consolas', monospace";
 
-    // Wyświetlanie wyników
+    // Rysowanie wyników
     const scoreText = (gameMode === 'localSingle') ? `Gracz: ${state.score_a}   AI: ${state.score_b}` : `Gracz A: ${state.score_a}   Gracz B: ${state.score_b}`;
+    ctx.textAlign = 'left';
     ctx.fillText(scoreText, 10, 25);
 
-    // NOWOŚĆ: Rysowanie licznika czasu
-    let displayTime = 0;
-    if (startTime > 0) {
-        // Jeśli gra się zakończyła, pokaż zamrożony czas, w przeciwnym razie aktualizuj na bieżąco
-        displayTime = (gameEndTime > 0) ? (gameEndTime - startTime) : (Date.now() - startTime);
-    }
-    const totalSeconds = Math.floor(displayTime / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    const timeString = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-
-    ctx.textAlign = 'center';
-    ctx.fillText(`Czas: ${timeString}`, WIDTH / 2, 25);
-    ctx.textAlign = 'left'; // Zresetuj wyrównanie tekstu
+    // Rysowanie licznika czasu
+    ctx.textAlign = 'right';
+    const minutes = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
+    const seconds = (elapsedTime % 60).toString().padStart(2, '0');
+    ctx.fillText(`Czas: ${minutes}:${seconds}`, WIDTH - 5, 25);
+    ctx.textAlign = 'left'; // Resetowanie wyrównania
 
     drawGrid();
     drawFood(state.food);
@@ -198,6 +189,7 @@ function draw(state) {
     drawSnakeColored(state.snake_b, 'rgb(90, 140, 220)', 'rgb(50, 90, 180)');
 
     if (state.game_over) {
+        if (gameTimerInterval) clearInterval(gameTimerInterval); // Zatrzymaj licznik
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
         ctx.fillStyle = TEXT;
@@ -221,6 +213,14 @@ function generateFood() {
         };
     } while (allSnakeCells.some(cell => cell.x === foodPos.x && cell.y === foodPos.y));
     localGameState.food = foodPos;
+}
+
+function startTimer() {
+    if (gameTimerInterval) clearInterval(gameTimerInterval);
+    elapsedTime = 0;
+    gameTimerInterval = setInterval(() => {
+        elapsedTime++;
+    }, 1000);
 }
 
 // --- Logika Gry Jednoosobowej (z AI) ---
@@ -247,12 +247,9 @@ function startLocalSinglePlayerGame() {
     next_dir_a = { x: 1, y: 0 };
     next_dir_b = { x: -1, y: 0 };
 
-    // NOWOŚĆ: Resetowanie i uruchamianie licznika czasu
-    startTime = Date.now();
-    gameEndTime = 0;
-
     infoPanel.textContent = "Gracz: Strzałki | Komputer: AI | 'R' - Restart";
     generateFood();
+    startTimer(); // Uruchom licznik czasu
     localGameInterval = setInterval(localSinglePlayerGameLoop, 100);
 }
 
@@ -344,8 +341,6 @@ function localSinglePlayerGameLoop() {
 
     if (isCollision(localGameState.snake_a) || isCollision(localGameState.snake_b) || localGameState.game_over) {
         localGameState.game_over = true;
-        // NOWOŚĆ: Zapisz czas zakończenia gry, jeśli jeszcze nie został zapisany
-        if (!gameEndTime) gameEndTime = Date.now();
         clearInterval(localGameInterval);
         draw(localGameState);
         return;
@@ -394,12 +389,9 @@ function startLocalTwoPlayerGame() {
     next_dir_a = { x: 1, y: 0 };
     next_dir_b = { x: -1, y: 0 };
 
-    // NOWOŚĆ: Resetowanie i uruchamianie licznika czasu
-    startTime = Date.now();
-    gameEndTime = 0;
-
     infoPanel.textContent = "Gracz A: Strzałki | Gracz B: WASD | 'R' - Restart";
     generateFood();
+    startTimer(); // Uruchom licznik czasu
     localGameInterval = setInterval(localGameLoop, 100);
 }
 
@@ -440,8 +432,6 @@ function localGameLoop() {
 
     if (isCollision(localGameState.snake_a) || isCollision(localGameState.snake_b) || localGameState.game_over) {
         localGameState.game_over = true;
-        // NOWOŚĆ: Zapisz czas zakończenia gry, jeśli jeszcze nie został zapisany
-        if (!gameEndTime) gameEndTime = Date.now();
         clearInterval(localGameInterval);
         draw(localGameState);
         return;
@@ -512,31 +502,20 @@ socket.on('joinedRoom', (data) => {
     playerRole = data.role;
     lobbyContainer.style.display = 'none';
     gameContainer.style.display = 'block';
-    // NOWOŚĆ: Zeruj timery po dołączeniu do pokoju. Zostaną uruchomione przy pierwszym stanie gry.
-    startTime = 0;
-    gameEndTime = 0;
+    startTimer(); // Uruchom licznik czasu
     if (data.role === 'a') infoPanel.textContent = "Jesteś Graczem A (zielony). Oczekiwanie na drugiego gracza...";
     else if (data.role === 'b') infoPanel.textContent = "Jesteś Graczem B (niebieski). Gra zaraz się rozpocznie!";
 });
 socket.on('joinError', (message) => alert(message));
 socket.on('gameState', (state) => {
-    // NOWOŚĆ: Uruchom timer przy pierwszym "updatecie" od serwera (gdy gra faktycznie się zaczyna)
-    if (startTime === 0 && !state.game_over) {
-        startTime = Date.now();
-    }
-
     if (playerRole && state.score_a === 0 && state.score_b === 0 && !state.game_over) {
         if (playerRole === 'a') infoPanel.textContent = "Gracz A (zielony) | Sterowanie: Strzałki lub WASD";
         if (playerRole === 'b') infoPanel.textContent = "Gracz B (niebieski) | Sterowanie: Strzałki lub WASD";
     }
-
-    // NOWOŚĆ: Zatrzymaj timer, gdy serwer ogłosi koniec gry
-    if (state.game_over && !gameEndTime) {
-        gameEndTime = Date.now();
-    }
     draw(state);
 });
 socket.on('opponentLeft', () => {
+    if (gameTimerInterval) clearInterval(gameTimerInterval); // Zatrzymaj licznik
     alert('Przeciwnik opuścił grę. Zostaniesz przeniesiony do lobby.');
     window.location.reload();
 });
@@ -552,12 +531,7 @@ window.addEventListener('keydown', e => {
             case 'arrowdown': case 's': move = { x: 0, y: 1 }; break;
             case 'arrowleft': case 'a': move = { x: -1, y: 0 }; break;
             case 'arrowright': case 'd': move = { x: 1, y: 0 }; break;
-            case 'r':
-                socket.emit('restartGame');
-                // NOWOŚĆ: Resetuj timery po wysłaniu prośby o restart
-                startTime = 0;
-                gameEndTime = 0;
-                break;
+            case 'r': socket.emit('restartGame'); break;
         }
         if (move) socket.emit('playerMove', move);
     } else if (gameMode === 'local') {
@@ -578,3 +552,4 @@ window.addEventListener('keydown', e => {
         else if (key === 'r') startLocalSinglePlayerGame();
     }
 });
+
