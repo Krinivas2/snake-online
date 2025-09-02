@@ -20,6 +20,15 @@ let gameTimerInterval = null; // Interwał dla licznika czasu
 let elapsedTime = 0; // Czas gry w sekundach
 let dir_a, dir_b, next_dir_a, next_dir_b;
 
+/**
+ * Sprawdza, czy strona jest uruchomiona na urządzeniu mobilnym.
+ * @returns {boolean}
+ */
+function isMobileDevice() {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+}
+
+
 // --- Logika Menu Głównego ---
 function initializeMainMenu() {
     mainMenuContainer = document.createElement('div');
@@ -103,6 +112,77 @@ const BG = 'rgb(18, 18, 18)';
 const GRID = 'rgb(30, 30, 30)';
 const TEXT = 'rgb(230, 230, 230)';
 
+function addResponsiveStyles() {
+    const style = document.createElement('style');
+    style.innerHTML = `
+        body {
+            /* Zapobiega scrollowaniu strony przez dotyk */
+            touch-action: none; 
+        }
+
+        /* Style dla kontrolek dotykowych */
+        #controlsContainer {
+            position: fixed;
+            bottom: 20px;
+            width: 100%;
+            display: none; /* Domyślnie ukryte */
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            user-select: none; /* Zapobiega zaznaczaniu tekstu */
+            -webkit-user-select: none; /* Dla Safari */
+        }
+
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 180px;
+            height: 180px;
+            gap: 5px;
+        }
+
+        .control-btn {
+            background-color: rgba(80, 80, 80, 0.7);
+            border: 2px solid rgba(120, 120, 120, 0.8);
+            border-radius: 12px;
+            color: white;
+            font-size: 2.5em;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            backdrop-filter: blur(3px);
+        }
+
+        .control-btn:active {
+            background-color: rgba(110, 110, 110, 0.9);
+        }
+
+        #upBtn    { grid-column: 2; grid-row: 1; }
+        #leftBtn  { grid-column: 1; grid-row: 2; }
+        #rightBtn { grid-column: 3; grid-row: 2; }
+        #downBtn  { grid-column: 2; grid-row: 3; }
+
+        /* Media query dla urządzeń mobilnych */
+        @media (max-width: 768px) {
+            #gameCanvas {
+                width: 100%;
+                height: auto;
+            }
+            #infoPanel {
+                font-size: 0.8em; /* Zmniejsz czcionkę panelu info */
+            }
+            #browserInfoPanel {
+                display: none; /* Opcjonalnie ukryj panel z info o przeglądarce */
+            }
+            #mainMenuContainer button {
+                width: 80%; /* Przyciski menu na całą szerokość */
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 // --- Funkcje rysujące ---
 function drawGrid() {
@@ -334,13 +414,13 @@ function localSinglePlayerGameLoop() {
         return false;
     };
 
-    for(let i = 0; i < localGameState.snake_b.length; i++){
-        if(head_a.x === localGameState.snake_b[i].x && head_a.y === localGameState.snake_b[i].y) {
+    for (let i = 0; i < localGameState.snake_b.length; i++) {
+        if (head_a.x === localGameState.snake_b[i].x && head_a.y === localGameState.snake_b[i].y) {
             localGameState.game_over = true;
         }
     }
-    for(let i = 0; i < localGameState.snake_a.length; i++){
-        if(head_b.x === localGameState.snake_a[i].x && head_b.y === localGameState.snake_a[i].y) {
+    for (let i = 0; i < localGameState.snake_a.length; i++) {
+        if (head_b.x === localGameState.snake_a[i].x && head_b.y === localGameState.snake_a[i].y) {
             localGameState.game_over = true;
         }
     }
@@ -363,7 +443,7 @@ function localSinglePlayerGameLoop() {
     let ateFoodB = head_b.x === localGameState.food.x && head_b.y === localGameState.food.y;
     if (ateFoodB) {
         localGameState.score_b++;
-        if(!ateFoodA) generateFood();
+        if (!ateFoodA) generateFood();
     } else {
         localGameState.snake_b.pop();
     }
@@ -424,13 +504,13 @@ function localGameLoop() {
         return false;
     };
 
-    for(let i = 0; i < localGameState.snake_b.length; i++){
-        if(head_a.x === localGameState.snake_b[i].x && head_a.y === localGameState.snake_b[i].y) {
+    for (let i = 0; i < localGameState.snake_b.length; i++) {
+        if (head_a.x === localGameState.snake_b[i].x && head_a.y === localGameState.snake_b[i].y) {
             localGameState.game_over = true;
         }
     }
-    for(let i = 0; i < localGameState.snake_a.length; i++){
-        if(head_b.x === localGameState.snake_a[i].x && head_b.y === localGameState.snake_a[i].y) {
+    for (let i = 0; i < localGameState.snake_a.length; i++) {
+        if (head_b.x === localGameState.snake_a[i].x && head_b.y === localGameState.snake_a[i].y) {
             localGameState.game_over = true;
         }
     }
@@ -455,12 +535,82 @@ function localGameLoop() {
     let ateFoodB = head_b.x === localGameState.food.x && head_b.y === localGameState.food.y;
     if (ateFoodB) {
         localGameState.score_b++;
-        if(!ateFoodA) generateFood();
+        if (!ateFoodA) generateFood();
     } else {
         localGameState.snake_b.pop();
     }
 
     draw(localGameState);
+}
+
+// =====================================================================
+// === NOWA SEKCJA - OBSŁUGA STEROWANIA NA URZĄDZENIACH MOBILNYCH ===
+// =====================================================================
+
+function initializeMobileControls() {
+    // 1. Stworzenie kontenera na przyciski
+    const controlsContainer = document.createElement('div');
+    controlsContainer.id = 'controlsContainer';
+
+    // 2. Struktura D-Pada
+    controlsContainer.innerHTML = `
+        <div class="dpad">
+            <div id="upBtn" class="control-btn">↑</div>
+            <div id="leftBtn" class="control-btn">←</div>
+            <div id="rightBtn" class="control-btn">→</div>
+            <div id="downBtn" class="control-btn">↓</div>
+        </div>
+    `;
+    document.body.appendChild(controlsContainer);
+
+    // 3. Funkcja do obsługi ruchu
+    const handleMove = (move) => {
+        // Logika dla gry online
+        if (gameMode === 'online' && playerRole) {
+            socket.emit('playerMove', move);
+        }
+        // Logika dla gry lokalnej (gracz A jest sterowany dotykiem)
+        else if (gameMode === 'local' || gameMode === 'localSingle') {
+            const currentDir = dir_a;
+            // Zapobiegaj ruchowi w przeciwnym kierunku
+            if (move.x !== 0 && currentDir.x === 0) next_dir_a = move;
+            if (move.y !== 0 && currentDir.y === 0) next_dir_a = move;
+        }
+    };
+
+    // 4. Mapowanie przycisków do kierunków i dodawanie event listenerów
+    const controlMapping = {
+        'upBtn': { x: 0, y: -1 },
+        'downBtn': { x: 0, y: 1 },
+        'leftBtn': { x: -1, y: 0 },
+        'rightBtn': { x: 1, y: 0 }
+    };
+
+    for (const [btnId, move] of Object.entries(controlMapping)) {
+        const button = document.getElementById(btnId);
+        // 'touchstart' dla urządzeń mobilnych
+        button.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // Zapobiega "ghost click" i scrollowaniu
+            handleMove(move);
+        }, { passive: false });
+        // 'mousedown' do testowania na komputerze
+        button.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            handleMove(move);
+        });
+    }
+
+    // Pokaż kontrolki, gdy gra się rozpocznie
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.attributeName === 'style') {
+                const gameContainerVisible = gameContainer.style.display === 'block';
+                controlsContainer.style.display = gameContainerVisible ? 'flex' : 'none';
+            }
+        });
+    });
+
+    observer.observe(gameContainer, { attributes: true });
 }
 
 
@@ -526,18 +676,32 @@ socket.on('opponentLeft', () => {
     window.location.reload();
 });
 
-// --- Sterowanie ---
+// --- Sterowanie Klawiaturą ---
 window.addEventListener('keydown', e => {
     const key = e.key.toLowerCase();
 
     if (gameMode === 'online' && playerRole) {
         let move = null;
         switch (key) {
-            case 'arrowup': case 'w': move = { x: 0, y: -1 }; break;
-            case 'arrowdown': case 's': move = { x: 0, y: 1 }; break;
-            case 'arrowleft': case 'a': move = { x: -1, y: 0 }; break;
-            case 'arrowright': case 'd': move = { x: 1, y: 0 }; break;
-            case 'r': socket.emit('restartGame'); break;
+            case 'arrowup':
+            case 'w':
+                move = { x: 0, y: -1 };
+                break;
+            case 'arrowdown':
+            case 's':
+                move = { x: 0, y: 1 };
+                break;
+            case 'arrowleft':
+            case 'a':
+                move = { x: -1, y: 0 };
+                break;
+            case 'arrowright':
+            case 'd':
+                move = { x: 1, y: 0 };
+                break;
+            case 'r':
+                socket.emit('restartGame');
+                break;
         }
         if (move) socket.emit('playerMove', move);
     } else if (gameMode === 'local') {
@@ -561,7 +725,7 @@ window.addEventListener('keydown', e => {
 
 
 // =========================================================================
-// === NOWA SEKCJA - POBIERANIE I WYŚWIETLANIE INFORMACJI O PRZEGLĄDARCE ===
+// === POBIERANIE I WYŚWIETLANIE INFORMACJI O PRZEGLĄDARCE ===
 // =========================================================================
 
 /**
@@ -665,6 +829,16 @@ function initializeBrowserInfoPanel() {
 
 // --- Główne wywołanie po załadowaniu DOM ---
 window.addEventListener('DOMContentLoaded', () => {
+    addResponsiveStyles(); // <- DODANE WYWOŁANIE STYLÓW
     initializeMainMenu();
-    initializeBrowserInfoPanel(); // <- DODANE WYWOŁANIE NOWEJ FUNKCJI
+    initializeBrowserInfoPanel();
+
+    // Sprawdź, czy to urządzenie mobilne i dodaj kontrolki
+    if (isMobileDevice()) {
+        initializeMobileControls(); // <- DODANE WYWOŁANIE KONTROLEK
+
+        // Na urządzeniach mobilnych, informacja o sterowaniu klawiaturą jest bezużyteczna
+        const originalInfoPanelText = infoPanel.textContent;
+        infoPanel.textContent = "Steruj za pomocą przycisków na ekranie.";
+    }
 });
