@@ -89,9 +89,6 @@ function initializeMainMenu() {
     });
 }
 
-window.addEventListener('DOMContentLoaded', initializeMainMenu);
-
-
 // Ustawienia wizualne
 const TILE = 12;
 const GRID_W = 56,
@@ -562,3 +559,81 @@ window.addEventListener('keydown', e => {
     }
 });
 
+
+// =========================================================================
+// === NOWA SEKCJA - POBIERANIE I WYŚWIETLANIE INFORMACJI O PRZEGLĄDARCE ===
+// =========================================================================
+
+/**
+ * Tworzy i wyświetla panel z informacjami o przeglądarce i systemie użytkownika.
+ */
+function initializeBrowserInfoPanel() {
+    // 1. Utworzenie kontenera na informacje
+    const infoContainer = document.createElement('div');
+    infoContainer.id = 'browserInfoPanel';
+
+    // 2. Stylowanie kontenera
+    Object.assign(infoContainer.style, {
+        position: 'fixed',
+        bottom: '10px',
+        left: '10px',
+        padding: '10px 15px',
+        backgroundColor: 'rgba(20, 20, 20, 0.85)',
+        border: '1px solid rgb(90, 90, 90)',
+        borderRadius: '8px',
+        color: 'rgb(200, 200, 200)',
+        fontFamily: "'Consolas', monospace",
+        fontSize: '12px',
+        zIndex: '100', // Upewnienie się, że panel jest na wierzchu
+        backdropFilter: 'blur(3px)', // Efekt rozmycia tła (dla nowoczesnych przeglądarek)
+    });
+
+    // 3. Pobranie informacji z przeglądarki
+    const ua = navigator.userAgent;
+    let browserName = "Nieznana";
+    if (ua.includes("Firefox")) {
+        browserName = "Mozilla Firefox";
+    } else if (ua.includes("Edg")) {
+        browserName = "Microsoft Edge";
+    } else if (ua.includes("Chrome") && !ua.includes("Edg")) {
+        browserName = "Google Chrome";
+    } else if (ua.includes("Safari") && !ua.includes("Chrome")) {
+        browserName = "Apple Safari";
+    }
+
+    const os = navigator.platform;
+    const language = navigator.language;
+    const screenRes = `${window.screen.width}x${window.screen.height}`;
+    const viewportRes = `${window.innerWidth}x${window.innerHeight}`;
+
+    // 4. Wypełnienie kontenera danymi
+    infoContainer.innerHTML = `
+        <h3 style="margin: 0 0 8px 0; font-size: 14px; color: white;">ℹ️ Info</h3>
+        <ul style="list-style-type: none; padding: 0; margin: 0; line-height: 1.6;">
+            <li><strong>Przeglądarka:</strong> ${browserName}</li>
+            <li><strong>System:</strong> ${os}</li>
+            <li><strong>Język:</strong> ${language}</li>
+            <li><strong>Rozdzielczość Ekr.:</strong> ${screenRes}</li>
+            <li id="viewport-info"><strong>Rozmiar Okna:</strong> ${viewportRes}</li>
+        </ul>
+    `;
+
+    // 5. Dodanie kontenera do strony
+    document.body.appendChild(infoContainer);
+
+    // 6. Dodanie nasłuchiwania na zmianę rozmiaru okna, aby aktualizować informacje
+    window.addEventListener('resize', () => {
+        const newViewportRes = `${window.innerWidth}x${window.innerHeight}`;
+        const viewportElement = document.getElementById('viewport-info');
+        if (viewportElement) {
+            viewportElement.innerHTML = `<strong>Rozmiar Okna:</strong> ${newViewportRes}`;
+        }
+    });
+}
+
+
+// --- Główne wywołanie po załadowaniu DOM ---
+window.addEventListener('DOMContentLoaded', () => {
+    initializeMainMenu();
+    initializeBrowserInfoPanel(); // <- DODANE WYWOŁANIE NOWEJ FUNKCJI
+});
