@@ -40,7 +40,8 @@ function createNewRoomState() {
             score_a: 0, score_b: 0, game_over: false,
         },
         pendingMoves: { a: [], b: [] },
-        interval: null
+        interval: null,
+        isPaused: false
     };
 }
 
@@ -228,6 +229,26 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('togglePause', () => {
+        if (!socket.username || !socket.roomId) return;
+        const room = rooms[socket.roomId];
+        // Upewnij się, że pokój istnieje i gra nie jest zakończona
+        if (room && !room.gameState.game_over) {
+            room.isPaused = !room.isPaused; // Przełącz stan pauzy
+
+            if (room.isPaused) {
+                // Jeśli pauzujemy, zatrzymaj pętlę gry
+                clearInterval(room.interval);
+                console.log(`Game paused in room ${socket.roomId} by ${socket.username}`);
+            } else {
+                // Jeśli wznawiamy, uruchom pętlę gry ponownie
+                room.interval = setInterval(() => gameTick(socket.roomId), 1000 / FPS);
+                console.log(`Game resumed in room ${socket.roomId} by ${socket.username}`);
+            }
+            // Poinformuj OBU graczy w pokoju o zmianie stanu pauzy
+            io.to(socket.roomId).emit('pauseStateChanged', room.isPaused);
+        }
+    });
 
     socket.on('disconnect', () => {
         // Logika rozłączenia nie wymaga zmian, ponieważ usunięcie wpisu z `users`

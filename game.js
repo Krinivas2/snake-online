@@ -18,6 +18,8 @@ let localGameState = {};
 let localGameInterval = null;
 let gameTimerInterval = null; // Interwał dla licznika czasu
 let elapsedTime = 0; // Czas gry w sekundach
+let isPaused = false;
+let lastGameState = null;
 let dir_a, dir_b, next_dir_a, next_dir_b;
 
 /**
@@ -283,7 +285,7 @@ function draw(state) {
     drawSnakeColored(state.snake_b, 'rgb(90, 140, 220)', 'rgb(50, 90, 180)');
 
     if (state.game_over) {
-        if (gameTimerInterval) clearInterval(gameTimerInterval); // Zatrzymaj licznik
+        if (gameTimerInterval) clearInterval(gameTimerInterval);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(0, 0, WIDTH, HEIGHT);
         ctx.fillStyle = TEXT;
@@ -292,6 +294,14 @@ function draw(state) {
         ctx.fillText("KONIEC GRY", WIDTH / 2, HEIGHT / 2 - 20);
         ctx.font = "16px 'Consolas', monospace";
         ctx.fillText("Wciśnij R, aby zagrać ponownie.", WIDTH / 2, HEIGHT / 2 + 20);
+        ctx.textAlign = 'left';
+    } else if (isPaused) { // <-- DODANY WARUNEK DLA PAUZY
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, WIDTH, HEIGHT);
+        ctx.fillStyle = TEXT;
+        ctx.textAlign = 'center';
+        ctx.font = "bold 36px 'Consolas', monospace";
+        ctx.fillText("PAUZA", WIDTH / 2, HEIGHT / 2);
         ctx.textAlign = 'left';
     }
 }
@@ -312,6 +322,14 @@ function generateFood() {
 function startTimer() {
     if (gameTimerInterval) clearInterval(gameTimerInterval);
     elapsedTime = 0;
+    gameTimerInterval = setInterval(() => {
+        elapsedTime++;
+    }, 1000);
+}
+
+function resumeTimer() {
+    // Ta funkcja wznawia licznik bez resetowania go.
+    if (gameTimerInterval) clearInterval(gameTimerInterval); // Zabezpieczenie przed podwójnym licznikiem
     gameTimerInterval = setInterval(() => {
         elapsedTime++;
     }, 1000);
@@ -341,7 +359,7 @@ function startLocalSinglePlayerGame() {
     next_dir_a = { x: 1, y: 0 };
     next_dir_b = { x: -1, y: 0 };
 
-    infoPanel.textContent = "Gracz: Strzałki | Komputer: AI | 'R' - Restart";
+    infoPanel.textContent = "Gracz: Strzałki | Komputer: AI | 'R' - Restart | 'P' - Pauza";
     generateFood();
     startTimer(); // Uruchom licznik czasu
     localGameInterval = setInterval(localSinglePlayerGameLoop, 100);
@@ -483,7 +501,7 @@ function startLocalTwoPlayerGame() {
     next_dir_a = { x: 1, y: 0 };
     next_dir_b = { x: -1, y: 0 };
 
-    infoPanel.textContent = "Gracz A: Strzałki | Gracz B: WASD | 'R' - Restart";
+    infoPanel.textContent = "Gracz A: Strzałki | Gracz B: WASD | 'R' - Restart | 'P' - Pauza";
     generateFood();
     startTimer(); // Uruchom licznik czasu
     localGameInterval = setInterval(localGameLoop, 100);
@@ -685,11 +703,14 @@ socket.on('joinedRoom', (data) => {
 });
 socket.on('joinError', (message) => alert(message));
 socket.on('gameState', (state) => {
+    lastGameState = state;
     if (playerRole && state.score_a === 0 && state.score_b === 0 && !state.game_over) {
         if (playerRole === 'a') infoPanel.textContent = "Gracz A (zielony) | Sterowanie: Strzałki lub WASD";
         if (playerRole === 'b') infoPanel.textContent = "Gracz B (niebieski) | Sterowanie: Strzałki lub WASD";
     }
-    draw(state);
+    if (!isPaused) { // Rysuj tylko, jeśli gra nie jest spauzowana po stronie klienta
+      draw(state);
+    }
 });
 socket.on('opponentLeft', () => {
     if (gameTimerInterval) clearInterval(gameTimerInterval); // Zatrzymaj licznik
@@ -697,32 +718,55 @@ socket.on('opponentLeft', () => {
     window.location.reload();
 });
 
+socket.on('pauseStateChanged', (paused) => {
+    isPaused = paused;
+    if (isPaused) {
+        if (gameTimerInterval) clearInterval(gameTimerInterval);
+    } else {
+        resumeTimer(); // Używamy nowej funkcji, aby nie resetować czasu
+    }
+    // Wymuszamy przerysowanie, aby natychmiast pokazać/ukryć ekran pauzy
+    // To wymaga przechowywania ostatniego stanu gry.
+    // Jeśli lastGameState nie jest jeszcze zaimplementowane, dodajmy to:
+});
+
 // --- Sterowanie Klawiaturą ---
 window.addEventListener('keydown', e => {
     const key = e.key.toLowerCase();
 
+    // KROK 1: Obsługa klawisza pauzy ('P') ma absolutny priorytet.
+    // To pozwala zarówno włączyć, jak i wyłączyć pauzę.
+    if (key === 'p') {
+        if (gameMode === 'online') {
+            socket.emit('togglePause');
+        } else if (gameMode === 'local' || gameMode === 'localSingle') {
+            isPaused = !isPaused;
+            if (isPaused) {
+                clearInterval(localGameInterval);
+                clearInterval(gameTimerInterval);
+                draw(localGameState); // Narysuj ekran pauzy od razu
+            } else {
+                resumeTimer(); // Wznów licznik bez resetowania
+                const loopFunction = gameMode === 'local' ? localGameLoop : localSinglePlayerGameLoop;
+                localGameInterval = setInterval(loopFunction, 100);
+                draw(localGameState); // Przerysuj od razu, by schować ekran pauzy
+            }
+        }
+        return; // Zakończ po obsłużeniu pauzy
+    }
+
+    // KROK 2: Jeśli gra jest spauzowana, ignoruj wszystkie inne klawisze.
+    if (isPaused) return;
+
+    // KROK 3: Standardowa obsługa sterowania i restartu ('R').
     if (gameMode === 'online' && playerRole) {
         let move = null;
         switch (key) {
-            case 'arrowup':
-            case 'w':
-                move = { x: 0, y: -1 };
-                break;
-            case 'arrowdown':
-            case 's':
-                move = { x: 0, y: 1 };
-                break;
-            case 'arrowleft':
-            case 'a':
-                move = { x: -1, y: 0 };
-                break;
-            case 'arrowright':
-            case 'd':
-                move = { x: 1, y: 0 };
-                break;
-            case 'r':
-                socket.emit('restartGame');
-                break;
+            case 'arrowup': case 'w': move = { x: 0, y: -1 }; break;
+            case 'arrowdown': case 's': move = { x: 0, y: 1 }; break;
+            case 'arrowleft': case 'a': move = { x: -1, y: 0 }; break;
+            case 'arrowright': case 'd': move = { x: 1, y: 0 }; break;
+            case 'r': socket.emit('restartGame'); break;
         }
         if (move) socket.emit('playerMove', move);
     } else if (gameMode === 'local') {
