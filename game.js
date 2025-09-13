@@ -91,11 +91,19 @@ function initializeMainMenu() {
         startLocalTwoPlayerGame();
     });
 
-    onlineLobbyBtn.addEventListener('click', () => {
-        gameMode = 'online';
-        mainMenuContainer.style.display = 'none';
-        lobbyContainer.style.display = 'block';
-    });
+onlineLobbyBtn.addEventListener('click', () => {
+    promptForUsernameAndEnterLobby();
+});
+
+// NOWA FUNKCJA DO LOGOWANIA UŻYTKOWNIKA
+function promptForUsernameAndEnterLobby() {
+    let username = prompt("Podaj swoją nazwę użytkownika (min. 3 znaki):");
+    if (username && username.trim().length >= 3) {
+        socket.emit('registerUser', username.trim());
+    } else if (username !== null) { // Jeśli użytkownik nie kliknął 'Anuluj'
+        alert("Nazwa użytkownika jest za krótka.");
+    }
+}
 }
 
 // Ustawienia wizualne
@@ -653,6 +661,19 @@ createRoomBtn.addEventListener('click', () => {
 });
 
 // --- Nasłuchiwanie na Zdarzenia Socket.IO ---
+socket.on('registerError', (message) => {
+    alert(`Błąd rejestracji: ${message}`);
+    // Opcjonalnie: zapytaj ponownie o nazwę użytkownika
+    // promptForUsernameAndEnterLobby();
+});
+
+socket.on('registeredSuccessfully', () => {
+    console.log('Rejestracja pomyślna! Wchodzę do lobby.');
+    gameMode = 'online';
+    mainMenuContainer.style.display = 'none';
+    lobbyContainer.style.display = 'block';
+});
+
 socket.on('updateRoomList', (rooms) => updateRoomList(rooms));
 socket.on('joinedRoom', (data) => {
     playerRole = data.role;
