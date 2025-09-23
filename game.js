@@ -25,6 +25,7 @@ let currentLanguage = BASE_LANGUAGE;
 const SUPPORTED_LANGUAGES = {
     pl: { nameKey: 'languagePolish', flag: '🇵🇱' },
     en: { nameKey: 'languageEnglish', flag: '🇬🇧' },
+    es: { nameKey: 'languageSpanish', flag: '🇪🇸' },
     no: { nameKey: 'languageNorwegian', flag: '🇳🇴' },
 };
 
@@ -34,6 +35,7 @@ const I18N_STRINGS = {
     chooseLanguageDescription: 'Wybierz flagę, aby zmienić język interfejsu. Możesz też wpisać kod dowolnego języka (ISO 639-1).',
     languagePolish: 'Polski',
     languageEnglish: 'Angielski',
+    languageSpanish: 'Hiszpański',
     languageNorwegian: 'Norweski',
     customLanguageLabel: 'Inny język (kod ISO 639-1):',
     customLanguagePlaceholder: 'np. es, de',
@@ -85,9 +87,187 @@ const I18N_STRINGS = {
     unknown: 'Nieznana'
 };
 
+const PREDEFINED_TRANSLATIONS = {
+    en: {
+        appTitle: 'Multiplayer Snake',
+        chooseLanguageTitle: 'Choose a language',
+        chooseLanguageDescription: 'Select a flag to change the interface language. You can also enter any language code (ISO 639-1).',
+        languagePolish: 'Polish',
+        languageEnglish: 'English',
+        languageSpanish: 'Spanish',
+        languageNorwegian: 'Norwegian',
+        customLanguageLabel: 'Other language (ISO 639-1 code):',
+        customLanguagePlaceholder: 'e.g. es, de',
+        customLanguageApply: 'Apply',
+        languageStatusIdle: 'Pick a language to get started.',
+        languageStatusLoading: 'Translating the interface to {{languageName}}...',
+        languageStatusReady: 'Language set to {{languageName}}.',
+        languageStatusError: 'Translation failed. Please try again.',
+        languageStatusInvalid: 'Enter a valid language code (2 letters).',
+        languageToggleAria: 'Change language',
+        lobbyTitle: 'Lobby',
+        createRoomSectionTitle: 'Create a new room',
+        passwordPlaceholder: 'Password (optional)',
+        createRoomButton: 'Create Room',
+        availableRooms: 'Available Rooms',
+        waitingForOpponent: 'Waiting for the second player...',
+        chooseModeTitle: 'Choose a game mode',
+        singlePlayerButton: 'Single Player',
+        twoPlayerButton: 'Two Players',
+        onlineLobbyButton: 'Online Lobby',
+        promptUsername: 'Enter your username (min. 3 characters):',
+        usernameTooShort: 'The username is too short.',
+        singlePlayerControls: "Player: Arrow Keys | Computer: AI | 'R' - Restart | 'P' - Pause",
+        localTwoPlayerControls: "Player A: Arrow Keys | Player B: WASD | 'R' - Restart | 'P' - Pause",
+        onScreenControlsMessage: 'Use the on-screen buttons to control.',
+        onlineWaitingAsA: 'You are Player A (green). Waiting for the second player...',
+        onlineWaitingAsB: 'You are Player B (blue). The game will start soon!',
+        onlineControlsA: 'Player A (green) | Controls: Arrow Keys or WASD',
+        onlineControlsB: 'Player B (blue) | Controls: Arrow Keys or WASD',
+        registrationErrorPrefix: 'Registration error:',
+        noRoomsMessage: 'No rooms available. Create your own!',
+        roomName: 'Room #{{id}}',
+        playersCount: 'Players: {{current}}/{{max}}',
+        joinButton: 'Join',
+        promptRoomPassword: 'Enter the room password:',
+        opponentLeftAlert: 'Your opponent left the game. You will be returned to the lobby.',
+        scoreSingle: 'Player: {{playerScore}}   AI: {{aiScore}}',
+        scoreMulti: 'Player A: {{scoreA}}   Player B: {{scoreB}}',
+        timerLabel: 'Time: {{time}}',
+        gameOverTitle: 'GAME OVER',
+        pressRToPlayAgain: 'Press R to play again.',
+        pauseTitle: 'PAUSE',
+        browserInfoTitle: 'ℹ️ Info',
+        browserLabel: 'Browser',
+        systemLabel: 'System',
+        languageLabel: 'Language',
+        screenResolutionLabel: 'Screen Resolution',
+        viewportLabel: 'Viewport Size',
+        unknown: 'Unknown'
+    },
+    es: {
+        appTitle: 'Serpiente Multijugador',
+        chooseLanguageTitle: 'Elige un idioma',
+        chooseLanguageDescription: 'Selecciona una bandera para cambiar el idioma de la interfaz. También puedes introducir cualquier código de idioma (ISO 639-1).',
+        languagePolish: 'Polaco',
+        languageEnglish: 'Inglés',
+        languageSpanish: 'Español',
+        languageNorwegian: 'Noruego',
+        customLanguageLabel: 'Otro idioma (código ISO 639-1):',
+        customLanguagePlaceholder: 'p. ej. en, de',
+        customLanguageApply: 'Aplicar',
+        languageStatusIdle: 'Elige un idioma para comenzar.',
+        languageStatusLoading: 'Traduciendo la interfaz a {{languageName}}...',
+        languageStatusReady: 'Idioma configurado a {{languageName}}.',
+        languageStatusError: 'No se pudo traducir. Inténtalo de nuevo.',
+        languageStatusInvalid: 'Introduce un código de idioma válido (2 letras).',
+        languageToggleAria: 'Cambiar idioma',
+        lobbyTitle: 'Lobby',
+        createRoomSectionTitle: 'Crear una sala nueva',
+        passwordPlaceholder: 'Contraseña (opcional)',
+        createRoomButton: 'Crear sala',
+        availableRooms: 'Salas disponibles',
+        waitingForOpponent: 'Esperando al segundo jugador...',
+        chooseModeTitle: 'Elige un modo de juego',
+        singlePlayerButton: 'Un jugador',
+        twoPlayerButton: 'Dos jugadores',
+        onlineLobbyButton: 'Lobby en línea',
+        promptUsername: 'Introduce tu nombre de usuario (mín. 3 caracteres):',
+        usernameTooShort: 'El nombre de usuario es demasiado corto.',
+        singlePlayerControls: "Jugador: Flechas | Computadora: IA | 'R' - Reiniciar | 'P' - Pausa",
+        localTwoPlayerControls: "Jugador A: Flechas | Jugador B: WASD | 'R' - Reiniciar | 'P' - Pausa",
+        onScreenControlsMessage: 'Controla usando los botones en pantalla.',
+        onlineWaitingAsA: 'Eres el Jugador A (verde). Esperando al segundo jugador...',
+        onlineWaitingAsB: 'Eres el Jugador B (azul). ¡La partida comenzará pronto!',
+        onlineControlsA: 'Jugador A (verde) | Controles: Flechas o WASD',
+        onlineControlsB: 'Jugador B (azul) | Controles: Flechas o WASD',
+        registrationErrorPrefix: 'Error de registro:',
+        noRoomsMessage: 'No hay salas disponibles. ¡Crea la tuya!',
+        roomName: 'Sala #{{id}}',
+        playersCount: 'Jugadores: {{current}}/{{max}}',
+        joinButton: 'Unirse',
+        promptRoomPassword: 'Introduce la contraseña de la sala:',
+        opponentLeftAlert: 'Tu oponente salió de la partida. Volverás al lobby.',
+        scoreSingle: 'Jugador: {{playerScore}}   IA: {{aiScore}}',
+        scoreMulti: 'Jugador A: {{scoreA}}   Jugador B: {{scoreB}}',
+        timerLabel: 'Tiempo: {{time}}',
+        gameOverTitle: 'FIN DEL JUEGO',
+        pressRToPlayAgain: 'Presiona R para jugar de nuevo.',
+        pauseTitle: 'PAUSA',
+        browserInfoTitle: 'ℹ️ Info',
+        browserLabel: 'Navegador',
+        systemLabel: 'Sistema',
+        languageLabel: 'Idioma',
+        screenResolutionLabel: 'Resolución de pantalla',
+        viewportLabel: 'Tamaño de la ventana',
+        unknown: 'Desconocido'
+    },
+    no: {
+        appTitle: 'Flerspiller-Slange',
+        chooseLanguageTitle: 'Velg et språk',
+        chooseLanguageDescription: 'Velg et flagg for å endre språk i grensesnittet. Du kan også skrive inn en språkkode (ISO 639-1).',
+        languagePolish: 'Polsk',
+        languageEnglish: 'Engelsk',
+        languageSpanish: 'Spansk',
+        languageNorwegian: 'Norsk',
+        customLanguageLabel: 'Annet språk (ISO 639-1-kode):',
+        customLanguagePlaceholder: 'f.eks. en, de',
+        customLanguageApply: 'Bruk',
+        languageStatusIdle: 'Velg et språk for å komme i gang.',
+        languageStatusLoading: 'Oversetter grensesnittet til {{languageName}}...',
+        languageStatusReady: 'Språket er satt til {{languageName}}.',
+        languageStatusError: 'Kunne ikke oversette. Prøv igjen.',
+        languageStatusInvalid: 'Skriv inn en gyldig språkkode (2 bokstaver).',
+        languageToggleAria: 'Bytt språk',
+        lobbyTitle: 'Lobby',
+        createRoomSectionTitle: 'Lag et nytt rom',
+        passwordPlaceholder: 'Passord (valgfritt)',
+        createRoomButton: 'Lag rom',
+        availableRooms: 'Tilgjengelige rom',
+        waitingForOpponent: 'Venter på den andre spilleren...',
+        chooseModeTitle: 'Velg spillmodus',
+        singlePlayerButton: 'En spiller',
+        twoPlayerButton: 'To spillere',
+        onlineLobbyButton: 'Nettlobby',
+        promptUsername: 'Skriv inn brukernavnet ditt (minst 3 tegn):',
+        usernameTooShort: 'Brukernavnet er for kort.',
+        singlePlayerControls: "Spiller: Piltaster | Datamaskin: AI | 'R' - Start på nytt | 'P' - Pause",
+        localTwoPlayerControls: "Spiller A: Piltaster | Spiller B: WASD | 'R' - Start på nytt | 'P' - Pause",
+        onScreenControlsMessage: 'Styr med knappene på skjermen.',
+        onlineWaitingAsA: 'Du er spiller A (grønn). Venter på den andre spilleren...',
+        onlineWaitingAsB: 'Du er spiller B (blå). Spillet starter snart!',
+        onlineControlsA: 'Spiller A (grønn) | Kontroller: Piltaster eller WASD',
+        onlineControlsB: 'Spiller B (blå) | Kontroller: Piltaster eller WASD',
+        registrationErrorPrefix: 'Registreringsfeil:',
+        noRoomsMessage: 'Ingen rom tilgjengelig. Lag ditt eget!',
+        roomName: 'Rom #{{id}}',
+        playersCount: 'Spillere: {{current}}/{{max}}',
+        joinButton: 'Bli med',
+        promptRoomPassword: 'Skriv inn rompassordet:',
+        opponentLeftAlert: 'Motstanderen forlot spillet. Du blir sendt tilbake til lobbyen.',
+        scoreSingle: 'Spiller: {{playerScore}}   AI: {{aiScore}}',
+        scoreMulti: 'Spiller A: {{scoreA}}   Spiller B: {{scoreB}}',
+        timerLabel: 'Tid: {{time}}',
+        gameOverTitle: 'SPILLET ER OVER',
+        pressRToPlayAgain: 'Trykk R for å spille igjen.',
+        pauseTitle: 'PAUSE',
+        browserInfoTitle: 'ℹ️ Info',
+        browserLabel: 'Nettleser',
+        systemLabel: 'System',
+        languageLabel: 'Språk',
+        screenResolutionLabel: 'Skjermoppløsning',
+        viewportLabel: 'Vindusstørrelse',
+        unknown: 'Ukjent'
+    }
+};
+
 const translations = {
     [BASE_LANGUAGE]: { ...I18N_STRINGS }
 };
+
+Object.entries(PREDEFINED_TRANSLATIONS).forEach(([languageCode, dictionary]) => {
+    translations[languageCode] = { ...dictionary };
+});
 
 const translationCache = new Map();
 const translationPromises = {};
@@ -180,7 +360,12 @@ async function translateTextUsingAI(text, targetLanguage) {
 }
 
 async function ensureLanguage(language) {
-    if (!language || language === BASE_LANGUAGE || translations[language]) return;
+    if (!language || language === BASE_LANGUAGE) return;
+    if (translations[language]) return;
+    if (PREDEFINED_TRANSLATIONS[language]) {
+        translations[language] = { ...PREDEFINED_TRANSLATIONS[language] };
+        return;
+    }
     if (translationPromises[language]) {
         await translationPromises[language];
         return;
