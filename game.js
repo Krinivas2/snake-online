@@ -9,7 +9,350 @@ const roomList = document.getElementById('roomList');
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const infoPanel = document.getElementById('infoPanel');
+const languageOverlay = document.getElementById('languageOverlay');
+const languageStatus = document.getElementById('languageStatus');
+const customLanguageForm = document.getElementById('customLanguageForm');
+const customLanguageInput = document.getElementById('customLanguageInput');
+const languageToggle = document.getElementById('languageToggle');
+const languageOptionButtons = document.querySelectorAll('.language-option');
+const customLanguageSubmit = customLanguageForm ? customLanguageForm.querySelector('button[type="submit"]') : null;
 let mainMenuContainer; // Zdefiniowane globalnie
+
+// --- Konfiguracja tłumaczeń z wykorzystaniem AI ---
+const BASE_LANGUAGE = 'pl';
+let currentLanguage = BASE_LANGUAGE;
+
+const SUPPORTED_LANGUAGES = {
+    pl: { nameKey: 'languagePolish', flag: '🇵🇱' },
+    en: { nameKey: 'languageEnglish', flag: '🇬🇧' },
+    no: { nameKey: 'languageNorwegian', flag: '🇳🇴' },
+};
+
+const I18N_STRINGS = {
+    appTitle: 'Wieloosobowy Wąż',
+    chooseLanguageTitle: 'Wybierz język',
+    chooseLanguageDescription: 'Wybierz flagę, aby zmienić język interfejsu. Możesz też wpisać kod dowolnego języka (ISO 639-1).',
+    languagePolish: 'Polski',
+    languageEnglish: 'Angielski',
+    languageNorwegian: 'Norweski',
+    customLanguageLabel: 'Inny język (kod ISO 639-1):',
+    customLanguagePlaceholder: 'np. es, de',
+    customLanguageApply: 'Zastosuj',
+    languageStatusIdle: 'Wybierz język, aby rozpocząć.',
+    languageStatusLoading: 'Tłumaczę interfejs na {{languageName}}...',
+    languageStatusReady: 'Język ustawiono na {{languageName}}.',
+    languageStatusError: 'Nie udało się przetłumaczyć. Spróbuj ponownie.',
+    languageStatusInvalid: 'Podaj poprawny kod języka (2 litery).',
+    languageToggleAria: 'Zmień język',
+    lobbyTitle: 'Lobby',
+    createRoomSectionTitle: 'Stwórz nowy pokój',
+    passwordPlaceholder: 'Hasło (opcjonalne)',
+    createRoomButton: 'Stwórz Pokój',
+    availableRooms: 'Dostępne Pokoje',
+    waitingForOpponent: 'Oczekiwanie na drugiego gracza...',
+    chooseModeTitle: 'Wybierz tryb gry',
+    singlePlayerButton: 'Gra Jednoosobowa',
+    twoPlayerButton: 'Gra Dwuosobowa',
+    onlineLobbyButton: 'Online Lobby',
+    promptUsername: 'Podaj swoją nazwę użytkownika (min. 3 znaki):',
+    usernameTooShort: 'Nazwa użytkownika jest za krótka.',
+    singlePlayerControls: "Gracz: Strzałki | Komputer: AI | 'R' - Restart | 'P' - Pauza",
+    localTwoPlayerControls: "Gracz A: Strzałki | Gracz B: WASD | 'R' - Restart | 'P' - Pauza",
+    onScreenControlsMessage: 'Steruj za pomocą przycisków na ekranie.',
+    onlineWaitingAsA: 'Jesteś Graczem A (zielony). Oczekiwanie na drugiego gracza...',
+    onlineWaitingAsB: 'Jesteś Graczem B (niebieski). Gra zaraz się rozpocznie!',
+    onlineControlsA: 'Gracz A (zielony) | Sterowanie: Strzałki lub WASD',
+    onlineControlsB: 'Gracz B (niebieski) | Sterowanie: Strzałki lub WASD',
+    registrationErrorPrefix: 'Błąd rejestracji:',
+    noRoomsMessage: 'Brak dostępnych pokoi. Stwórz własny!',
+    roomName: 'Pokój #{{id}}',
+    playersCount: 'Gracze: {{current}}/{{max}}',
+    joinButton: 'Dołącz',
+    promptRoomPassword: 'Podaj hasło do pokoju:',
+    opponentLeftAlert: 'Przeciwnik opuścił grę. Zostaniesz przeniesiony do lobby.',
+    scoreSingle: 'Gracz: {{playerScore}}   AI: {{aiScore}}',
+    scoreMulti: 'Gracz A: {{scoreA}}   Gracz B: {{scoreB}}',
+    timerLabel: 'Czas: {{time}}',
+    gameOverTitle: 'KONIEC GRY',
+    pressRToPlayAgain: 'Wciśnij R, aby zagrać ponownie.',
+    pauseTitle: 'PAUZA',
+    browserInfoTitle: 'ℹ️ Info',
+    browserLabel: 'Przeglądarka',
+    systemLabel: 'System',
+    languageLabel: 'Język',
+    screenResolutionLabel: 'Rozdzielczość Ekr.',
+    viewportLabel: 'Rozmiar Okna',
+    unknown: 'Nieznana'
+};
+
+const translations = {
+    [BASE_LANGUAGE]: { ...I18N_STRINGS }
+};
+
+const translationCache = new Map();
+const translationPromises = {};
+let browserInfoPanel = null;
+let browserInfoData = null;
+
+function normalizeLanguageCode(code) {
+    if (!code) return '';
+    return code.toLowerCase().trim().split(/[-_]/)[0];
+}
+
+function t(key, replacements = {}, languageOverride) {
+    const lang = languageOverride || currentLanguage;
+    const dictionary = translations[lang] || translations[BASE_LANGUAGE] || {};
+    let text = dictionary[key] || translations[BASE_LANGUAGE][key] || key;
+    if (!text) return '';
+    Object.entries(replacements || {}).forEach(([placeholder, value]) => {
+        const pattern = new RegExp(`\\{\\{\s*${placeholder}\s*\\}\}`, 'g');
+        text = text.replace(pattern, String(value));
+    });
+    return text;
+}
+
+function setElementTranslation(element, key, replacements = {}) {
+    if (!element) return;
+    element.dataset.i18nKey = key;
+    if (replacements && Object.keys(replacements).length > 0) {
+        element.dataset.i18nArgs = JSON.stringify(replacements);
+    } else {
+        delete element.dataset.i18nArgs;
+    }
+    const attr = element.dataset.i18nAttr || 'textContent';
+    const value = t(key, replacements);
+    if (attr === 'textContent') {
+        element.textContent = value;
+    } else {
+        element.setAttribute(attr, value);
+    }
+}
+
+function applyTranslationsToDom() {
+    document.querySelectorAll('[data-i18n-key]').forEach(element => {
+        const key = element.dataset.i18nKey;
+        if (!key) return;
+        let replacements = {};
+        if (element.dataset.i18nArgs) {
+            try {
+                replacements = JSON.parse(element.dataset.i18nArgs);
+            } catch (error) {
+                console.warn('Nie można sparsować argumentów tłumaczenia:', error);
+            }
+        }
+        const attr = element.dataset.i18nAttr || 'textContent';
+        const value = t(key, replacements);
+        if (attr === 'textContent') {
+            element.textContent = value;
+        } else {
+            element.setAttribute(attr, value);
+        }
+    });
+}
+
+async function translateTextUsingAI(text, targetLanguage) {
+    if (!text || !text.trim() || targetLanguage === BASE_LANGUAGE) return text;
+    const cacheKey = `${targetLanguage}::${text}`;
+    if (translationCache.has(cacheKey)) return translationCache.get(cacheKey);
+
+    const response = await fetch('https://libretranslate.de/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            q: text,
+            source: 'pl',
+            target: targetLanguage,
+            format: 'text'
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error(`Translation API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.error) {
+        throw new Error(data.error);
+    }
+    const translated = data.translatedText || text;
+    translationCache.set(cacheKey, translated);
+    return translated;
+}
+
+async function ensureLanguage(language) {
+    if (!language || language === BASE_LANGUAGE || translations[language]) return;
+    if (translationPromises[language]) {
+        await translationPromises[language];
+        return;
+    }
+
+    translationPromises[language] = (async () => {
+        const translated = {};
+        for (const [key, baseText] of Object.entries(I18N_STRINGS)) {
+            translated[key] = await translateTextUsingAI(baseText, language);
+        }
+        translations[language] = translated;
+    })();
+
+    await translationPromises[language];
+}
+
+function getLanguageDisplayName(language, dictionaryLanguage = currentLanguage) {
+    const normalized = normalizeLanguageCode(language);
+    if (!normalized) return '';
+    const supported = SUPPORTED_LANGUAGES[normalized];
+    if (supported) {
+        const dictionary = translations[dictionaryLanguage] || translations[BASE_LANGUAGE];
+        if (dictionary && dictionary[supported.nameKey]) {
+            return dictionary[supported.nameKey];
+        }
+    }
+    return normalized.toUpperCase();
+}
+
+function disableLanguageControls(disabled) {
+    languageOptionButtons.forEach(button => {
+        button.disabled = disabled;
+    });
+    if (customLanguageInput) customLanguageInput.disabled = disabled;
+    if (customLanguageSubmit) customLanguageSubmit.disabled = disabled;
+}
+
+function showLanguageOverlay(resetStatus = false) {
+    if (!languageOverlay) return;
+    languageOverlay.style.display = 'flex';
+    languageOverlay.classList.add('visible');
+    languageOverlay.removeAttribute('aria-hidden');
+    if (resetStatus) {
+        setElementTranslation(languageStatus, 'languageStatusIdle');
+        if (customLanguageInput) customLanguageInput.value = '';
+    }
+}
+
+function hideLanguageOverlay() {
+    if (!languageOverlay) return;
+    languageOverlay.classList.remove('visible');
+    languageOverlay.setAttribute('aria-hidden', 'true');
+    languageOverlay.style.display = 'none';
+}
+
+async function setLanguage(languageCode) {
+    const normalized = normalizeLanguageCode(languageCode);
+    if (!normalized) {
+        throw new Error('invalid_language');
+    }
+
+    await ensureLanguage(normalized);
+    currentLanguage = normalized;
+    document.documentElement.lang = normalized;
+    applyTranslationsToDom();
+    if (browserInfoPanel) {
+        renderBrowserInfoPanel();
+    }
+    redrawCurrentGameState();
+    const languageName = getLanguageDisplayName(normalized);
+    setElementTranslation(languageStatus, 'languageStatusReady', { languageName });
+    hideLanguageOverlay();
+    if (languageToggle) {
+        languageToggle.style.display = 'inline-flex';
+    }
+    if (customLanguageInput) {
+        customLanguageInput.value = '';
+    }
+    return normalized;
+}
+
+async function handleLanguageSelection(languageCode) {
+    const normalized = normalizeLanguageCode(languageCode);
+    if (!normalized || normalized.length < 2) {
+        setElementTranslation(languageStatus, 'languageStatusInvalid');
+        return;
+    }
+    disableLanguageControls(true);
+    const languageName = getLanguageDisplayName(normalized);
+    setElementTranslation(languageStatus, 'languageStatusLoading', { languageName });
+    try {
+        await setLanguage(normalized);
+    } catch (error) {
+        console.error('Language change failed:', error);
+        setElementTranslation(languageStatus, 'languageStatusError');
+    } finally {
+        disableLanguageControls(false);
+    }
+}
+
+async function translateDynamicMessage(message) {
+    if (!message) return '';
+    if (currentLanguage === BASE_LANGUAGE) return message;
+    try {
+        return await translateTextUsingAI(message, currentLanguage);
+    } catch (error) {
+        console.error('Dynamic translation failed:', error);
+        return message;
+    }
+}
+
+function redrawCurrentGameState() {
+    if (gameMode === 'local' || gameMode === 'localSingle') {
+        if (localGameState && localGameState.snake_a) {
+            draw(localGameState);
+        }
+    } else if (gameMode === 'online' && lastGameState) {
+        draw(lastGameState);
+    }
+}
+
+function setupLanguageSelector() {
+    if (languageOptionButtons && languageOptionButtons.length > 0) {
+        languageOptionButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const lang = button.dataset.lang;
+                if (lang) {
+                    handleLanguageSelection(lang);
+                }
+            });
+        });
+    }
+    if (customLanguageForm) {
+        customLanguageForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            const code = customLanguageInput ? customLanguageInput.value : '';
+            handleLanguageSelection(code);
+        });
+    }
+    if (languageToggle) {
+        languageToggle.addEventListener('click', () => {
+            showLanguageOverlay(true);
+        });
+    }
+    if (languageStatus) {
+        setElementTranslation(languageStatus, 'languageStatusIdle');
+    }
+    if (languageOverlay) {
+        showLanguageOverlay(false);
+    }
+}
+
+function renderBrowserInfoPanel() {
+    if (!browserInfoPanel || !browserInfoData) return;
+    const infoTitle = t('browserInfoTitle');
+    const browserLabel = t('browserLabel');
+    const systemLabel = t('systemLabel');
+    const languageLabelText = t('languageLabel');
+    const screenLabel = t('screenResolutionLabel');
+    const viewportLabel = t('viewportLabel');
+
+    browserInfoPanel.innerHTML = `
+        <h3 style="margin: 0 0 8px 0; font-size: 14px; color: white;">${infoTitle}</h3>
+        <ul style="list-style-type: none; padding: 0; margin: 0; line-height: 1.6;">
+            <li><strong>${browserLabel}:</strong> ${browserInfoData.browser}</li>
+            <li><strong>${systemLabel}:</strong> ${browserInfoData.os}</li>
+            <li><strong>${languageLabelText}:</strong> ${browserInfoData.language}</li>
+            <li><strong>${screenLabel}:</strong> ${browserInfoData.screenResolution}</li>
+            <li><strong>${viewportLabel}:</strong> ${browserInfoData.viewport}</li>
+        </ul>
+    `;
+}
 
 // --- Zmienne stanu gry ---
 let gameMode = 'menu'; // 'menu', 'online', 'local', 'localSingle'
@@ -40,20 +383,20 @@ function initializeMainMenu() {
     mainMenuContainer.style.fontFamily = "'Consolas', monospace";
 
     const title = document.createElement('h1');
-    title.textContent = 'Wybierz tryb gry';
+    setElementTranslation(title, 'chooseModeTitle');
     title.style.color = 'rgb(230, 230, 230)';
     title.style.fontSize = '3em';
     title.style.marginBottom = '40px';
     mainMenuContainer.appendChild(title);
 
     const singlePlayerBtn = document.createElement('button');
-    singlePlayerBtn.textContent = 'Gra Jednoosobowa';
+    setElementTranslation(singlePlayerBtn, 'singlePlayerButton');
 
     const twoPlayerBtn = document.createElement('button');
-    twoPlayerBtn.textContent = 'Gra Dwuosobowa';
+    setElementTranslation(twoPlayerBtn, 'twoPlayerButton');
 
     const onlineLobbyBtn = document.createElement('button');
-    onlineLobbyBtn.textContent = 'Online Lobby';
+    setElementTranslation(onlineLobbyBtn, 'onlineLobbyButton');
 
     const buttons = [singlePlayerBtn, twoPlayerBtn, onlineLobbyBtn];
     buttons.forEach(btn => {
@@ -93,17 +436,18 @@ function initializeMainMenu() {
         startLocalTwoPlayerGame();
     });
 
-onlineLobbyBtn.addEventListener('click', () => {
-    promptForUsernameAndEnterLobby();
-});
+    onlineLobbyBtn.addEventListener('click', async () => {
+        await promptForUsernameAndEnterLobby();
+    });
 
 // NOWA FUNKCJA DO LOGOWANIA UŻYTKOWNIKA
-function promptForUsernameAndEnterLobby() {
-    let username = prompt("Podaj swoją nazwę użytkownika (min. 3 znaki):");
+async function promptForUsernameAndEnterLobby() {
+    const promptMessage = t('promptUsername');
+    let username = prompt(promptMessage);
     if (username && username.trim().length >= 3) {
         socket.emit('registerUser', username.trim());
     } else if (username !== null) { // Jeśli użytkownik nie kliknął 'Anuluj'
-        alert("Nazwa użytkownika jest za krótka.");
+        alert(t('usernameTooShort'));
     }
 }
 }
@@ -259,7 +603,9 @@ function draw(state) {
     ctx.font = "22px 'Consolas', monospace";
 
     // Rysowanie wyników
-    const scoreText = (gameMode === 'localSingle') ? `Gracz: ${state.score_a}   AI: ${state.score_b}` : `Gracz A: ${state.score_a}   Gracz B: ${state.score_b}`;
+    const scoreText = (gameMode === 'localSingle')
+        ? t('scoreSingle', { playerScore: state.score_a, aiScore: state.score_b })
+        : t('scoreMulti', { scoreA: state.score_a, scoreB: state.score_b });
     ctx.textAlign = 'left';
     ctx.fillText(scoreText, 10, 25);
 
@@ -267,7 +613,7 @@ function draw(state) {
     ctx.textAlign = 'right';
     const minutes = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
     const seconds = (elapsedTime % 60).toString().padStart(2, '0');
-    ctx.fillText(`Czas: ${minutes}:${seconds}`, WIDTH - 5, 25);
+    ctx.fillText(t('timerLabel', { time: `${minutes}:${seconds}` }), WIDTH - 5, 25);
     ctx.textAlign = 'left'; // Resetowanie wyrównania
 
     // Znak wodny
@@ -291,9 +637,9 @@ function draw(state) {
         ctx.fillStyle = TEXT;
         ctx.textAlign = 'center';
         ctx.font = "bold 36px 'Consolas', monospace";
-        ctx.fillText("KONIEC GRY", WIDTH / 2, HEIGHT / 2 - 20);
+        ctx.fillText(t('gameOverTitle'), WIDTH / 2, HEIGHT / 2 - 20);
         ctx.font = "16px 'Consolas', monospace";
-        ctx.fillText("Wciśnij R, aby zagrać ponownie.", WIDTH / 2, HEIGHT / 2 + 20);
+        ctx.fillText(t('pressRToPlayAgain'), WIDTH / 2, HEIGHT / 2 + 20);
         ctx.textAlign = 'left';
     } else if (isPaused) { // <-- DODANY WARUNEK DLA PAUZY
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -301,7 +647,7 @@ function draw(state) {
         ctx.fillStyle = TEXT;
         ctx.textAlign = 'center';
         ctx.font = "bold 36px 'Consolas', monospace";
-        ctx.fillText("PAUZA", WIDTH / 2, HEIGHT / 2);
+        ctx.fillText(t('pauseTitle'), WIDTH / 2, HEIGHT / 2);
         ctx.textAlign = 'left';
     }
 }
@@ -359,7 +705,7 @@ function startLocalSinglePlayerGame() {
     next_dir_a = { x: 1, y: 0 };
     next_dir_b = { x: -1, y: 0 };
 
-    infoPanel.textContent = "Gracz: Strzałki | Komputer: AI | 'R' - Restart | 'P' - Pauza";
+    setElementTranslation(infoPanel, 'singlePlayerControls');
     generateFood();
     startTimer(); // Uruchom licznik czasu
     localGameInterval = setInterval(localSinglePlayerGameLoop, 100);
@@ -501,7 +847,7 @@ function startLocalTwoPlayerGame() {
     next_dir_a = { x: 1, y: 0 };
     next_dir_b = { x: -1, y: 0 };
 
-    infoPanel.textContent = "Gracz A: Strzałki | Gracz B: WASD | 'R' - Restart | 'P' - Pauza";
+    setElementTranslation(infoPanel, 'localTwoPlayerControls');
     generateFood();
     startTimer(); // Uruchom licznik czasu
     localGameInterval = setInterval(localGameLoop, 100);
@@ -643,32 +989,50 @@ function initializeMobileControls() {
 // --- Logika Lobby Online ---
 function updateRoomList(rooms) {
     roomList.innerHTML = '';
-    if (rooms.length === 0) {
-        roomList.innerHTML = '<p>Brak dostępnych pokoi. Stwórz własny!</p>';
+    if (!rooms || rooms.length === 0) {
+        const emptyMessage = document.createElement('p');
+        setElementTranslation(emptyMessage, 'noRoomsMessage');
+        roomList.appendChild(emptyMessage);
         return;
     }
 
     rooms.forEach(room => {
         const roomElement = document.createElement('div');
         roomElement.classList.add('room-item');
-        let lockIcon = room.hasPassword ? '&#128274;' : '';
-        roomElement.innerHTML = `
-            <span>Pokój #${room.id.substring(5, 10)} ${lockIcon}</span>
-            <span>Gracze: ${room.playerCount}/2</span>
-        `;
+
+        const nameContainer = document.createElement('span');
+        const roomNameText = document.createElement('span');
+        setElementTranslation(roomNameText, 'roomName', { id: room.id.substring(5, 10) });
+        nameContainer.appendChild(roomNameText);
+        if (room.hasPassword) {
+            const lockSpan = document.createElement('span');
+            lockSpan.textContent = ' 🔒';
+            lockSpan.setAttribute('aria-hidden', 'true');
+            nameContainer.appendChild(lockSpan);
+        }
+
+        const playersSpan = document.createElement('span');
+        setElementTranslation(playersSpan, 'playersCount', { current: room.playerCount, max: 2 });
+
+        roomElement.appendChild(nameContainer);
+        roomElement.appendChild(playersSpan);
+
         if (room.playerCount < 2) {
             const joinBtn = document.createElement('button');
-            joinBtn.textContent = 'Dołącz';
-            joinBtn.onclick = () => {
+            setElementTranslation(joinBtn, 'joinButton');
+            joinBtn.addEventListener('click', () => {
                 let password = '';
                 if (room.hasPassword) {
-                    password = prompt('Podaj hasło do pokoju:');
-                    if (password === null) return;
+                    const promptText = t('promptRoomPassword');
+                    const input = prompt(promptText);
+                    if (input === null) return;
+                    password = input;
                 }
-                socket.emit('joinRoom', { roomId: room.id, password: password });
-            };
+                socket.emit('joinRoom', { roomId: room.id, password });
+            });
             roomElement.appendChild(joinBtn);
         }
+
         roomList.appendChild(roomElement);
     });
 }
@@ -679,8 +1043,10 @@ createRoomBtn.addEventListener('click', () => {
 });
 
 // --- Nasłuchiwanie na Zdarzenia Socket.IO ---
-socket.on('registerError', (message) => {
-    alert(`Błąd rejestracji: ${message}`);
+socket.on('registerError', async (message) => {
+    const prefix = t('registrationErrorPrefix');
+    const translatedMessage = await translateDynamicMessage(message);
+    alert(`${prefix} ${translatedMessage}`);
     // Opcjonalnie: zapytaj ponownie o nazwę użytkownika
     // promptForUsernameAndEnterLobby();
 });
@@ -698,15 +1064,21 @@ socket.on('joinedRoom', (data) => {
     lobbyContainer.style.display = 'none';
     gameContainer.style.display = 'block';
     startTimer(); // Uruchom licznik czasu
-    if (data.role === 'a') infoPanel.textContent = "Jesteś Graczem A (zielony). Oczekiwanie na drugiego gracza...";
-    else if (data.role === 'b') infoPanel.textContent = "Jesteś Graczem B (niebieski). Gra zaraz się rozpocznie!";
+    if (data.role === 'a') {
+        setElementTranslation(infoPanel, 'onlineWaitingAsA');
+    } else if (data.role === 'b') {
+        setElementTranslation(infoPanel, 'onlineWaitingAsB');
+    }
 });
-socket.on('joinError', (message) => alert(message));
+socket.on('joinError', async (message) => {
+    const translatedMessage = await translateDynamicMessage(message);
+    alert(translatedMessage);
+});
 socket.on('gameState', (state) => {
     lastGameState = state;
     if (playerRole && state.score_a === 0 && state.score_b === 0 && !state.game_over) {
-        if (playerRole === 'a') infoPanel.textContent = "Gracz A (zielony) | Sterowanie: Strzałki lub WASD";
-        if (playerRole === 'b') infoPanel.textContent = "Gracz B (niebieski) | Sterowanie: Strzałki lub WASD";
+        if (playerRole === 'a') setElementTranslation(infoPanel, 'onlineControlsA');
+        if (playerRole === 'b') setElementTranslation(infoPanel, 'onlineControlsB');
     }
     if (!isPaused) { // Rysuj tylko, jeśli gra nie jest spauzowana po stronie klienta
       draw(state);
@@ -714,7 +1086,7 @@ socket.on('gameState', (state) => {
 });
 socket.on('opponentLeft', () => {
     if (gameTimerInterval) clearInterval(gameTimerInterval); // Zatrzymaj licznik
-    alert('Przeciwnik opuścił grę. Zostaniesz przeniesiony do lobby.');
+    alert(t('opponentLeftAlert'));
     window.location.reload();
 });
 
@@ -797,12 +1169,10 @@ window.addEventListener('keydown', e => {
  * Tworzy i wyświetla panel z informacjami o przeglądarce i systemie użytkownika.
  */
 function initializeBrowserInfoPanel() {
-    // 1. Utworzenie kontenera na informacje
-    const infoContainer = document.createElement('div');
-    infoContainer.id = 'browserInfoPanel';
+    browserInfoPanel = document.createElement('div');
+    browserInfoPanel.id = 'browserInfoPanel';
 
-    // 2. Stylowanie kontenera
-    Object.assign(infoContainer.style, {
+    Object.assign(browserInfoPanel.style, {
         position: 'fixed',
         bottom: '10px',
         left: '10px',
@@ -813,81 +1183,39 @@ function initializeBrowserInfoPanel() {
         color: 'rgb(200, 200, 200)',
         fontFamily: "'Consolas', monospace",
         fontSize: '12px',
-        zIndex: '100', // Upewnienie się, że panel jest na wierzchu
-        backdropFilter: 'blur(3px)', // Efekt rozmycia tła (dla nowoczesnych przeglądarek)
+        zIndex: '100',
+        backdropFilter: 'blur(3px)'
     });
 
-    // 3. Pobranie informacji z przeglądarki
     const ua = navigator.userAgent;
-    let browserName = "Nieznana";
-    if (ua.includes("Firefox")) {
-        browserName = "Mozilla Firefox";
-    } else if (ua.includes("Edg")) {
-        browserName = "Microsoft Edge";
-    } else if (ua.includes("Chrome") && !ua.includes("Edg")) {
-        browserName = "Google Chrome";
-    } else if (ua.includes("Safari") && !ua.includes("Chrome")) {
-        browserName = "Apple Safari";
+    let browserName = t('unknown');
+    if (ua.includes('Firefox')) {
+        browserName = 'Mozilla Firefox';
+    } else if (ua.includes('Edg')) {
+        browserName = 'Microsoft Edge';
+    } else if (ua.includes('Chrome') && !ua.includes('Edg')) {
+        browserName = 'Google Chrome';
+    } else if (ua.includes('Safari') && !ua.includes('Chrome')) {
+        browserName = 'Apple Safari';
     }
 
-    const os = navigator.platform;
-    const language = navigator.language;
-    const screenRes = `${window.screen.width}x${window.screen.height}`;
-    const viewportRes = `${window.innerWidth}x${window.innerHeight}`;
-
-    const browserInfo = {
+    browserInfoData = {
         browser: browserName,
-        os: os,
-        language: language,
-        screenResolution: screenRes,
-        viewport: viewportRes
+        os: navigator.platform,
+        language: navigator.language,
+        screenResolution: `${window.screen.width}x${window.screen.height}`,
+        viewport: `${window.innerWidth}x${window.innerHeight}`
     };
-    socket.emit('clientBrowserInfo', browserInfo);
 
+    socket.emit('clientBrowserInfo', { ...browserInfoData });
 
-    infoContainer.innerHTML = `
-        <h3 style="margin: 0 0 8px 0; font-size: 14px; color: white;">ℹ️ Info</h3>
-        <ul style="list-style-type: none; padding: 0; margin: 0; line-height: 1.6;">
-            <li><strong>Przeglądarka:</strong> ${browserName}</li>
-            <li><strong>System:</strong> ${os}</li>
-            <li><strong>Język:</strong> ${language}</li>
-            <li><strong>Rozdzielczość Ekr.:</strong> ${screenRes}</li>
-            <li id="viewport-info"><strong>Rozmiar Okna:</strong> ${viewportRes}</li>
-        </ul>
-    `;
-
-    document.body.appendChild(infoContainer);
+    renderBrowserInfoPanel();
+    document.body.appendChild(browserInfoPanel);
 
     window.addEventListener('resize', () => {
-        const newViewportRes = `${window.innerWidth}x${window.innerHeight}`;
-        const viewportElement = document.getElementById('viewport-info');
-        if (viewportElement) {
-            viewportElement.innerHTML = `<strong>Rozmiar Okna:</strong> ${newViewportRes}`;
-        }
-    });
-
-    // 4. Wypełnienie kontenera danymi
-    infoContainer.innerHTML = `
-        <h3 style="margin: 0 0 8px 0; font-size: 14px; color: white;">ℹ️ Info</h3>
-        <ul style="list-style-type: none; padding: 0; margin: 0; line-height: 1.6;">
-            <li><strong>Przeglądarka:</strong> ${browserName}</li>
-            <li><strong>System:</strong> ${os}</li>
-            <li><strong>Język:</strong> ${language}</li>
-            <li><strong>Rozdzielczość Ekr.:</strong> ${screenRes}</li>
-            <li id="viewport-info"><strong>Rozmiar Okna:</strong> ${viewportRes}</li>
-        </ul>
-    `;
-
-    // 5. Dodanie kontenera do strony
-    document.body.appendChild(infoContainer);
-
-    // 6. Dodanie nasłuchiwania na zmianę rozmiaru okna, aby aktualizować informacje
-    window.addEventListener('resize', () => {
-        const newViewportRes = `${window.innerWidth}x${window.innerHeight}`;
-        const viewportElement = document.getElementById('viewport-info');
-        if (viewportElement) {
-            viewportElement.innerHTML = `<strong>Rozmiar Okna:</strong> ${newViewportRes}`;
-        }
+        if (!browserInfoData) return;
+        browserInfoData.viewport = `${window.innerWidth}x${window.innerHeight}`;
+        renderBrowserInfoPanel();
     });
 }
 
@@ -895,15 +1223,16 @@ function initializeBrowserInfoPanel() {
 // --- Główne wywołanie po załadowaniu DOM ---
 window.addEventListener('DOMContentLoaded', () => {
     addResponsiveStyles(); // <- DODANE WYWOŁANIE STYLÓW
+    setupLanguageSelector();
     initializeMainMenu();
     initializeBrowserInfoPanel();
+    applyTranslationsToDom();
 
     // Sprawdź, czy to urządzenie mobilne i dodaj kontrolki
     if (isMobileDevice()) {
         initializeMobileControls(); // <- DODANE WYWOŁANIE KONTROLEK
 
         // Na urządzeniach mobilnych, informacja o sterowaniu klawiaturą jest bezużyteczna
-        const originalInfoPanelText = infoPanel.textContent;
-        infoPanel.textContent = "Steruj za pomocą przycisków na ekranie.";
+        setElementTranslation(infoPanel, 'onScreenControlsMessage');
     }
 });

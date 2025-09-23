@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Wieloosobowy Wąż</title>
+    <title data-i18n-key="appTitle">Wieloosobowy Wąż</title>
     <style>
         body { background-color: #121212; color: #e2e2e2; font-family: 'Consolas', monospace; display: flex; flex-direction: column; align-items: center; margin: 0; }
         h1, h2 { color: #fff; text-align: center; }
@@ -16,27 +16,76 @@
         input[type="text"] { padding: 8px; background-color: #333; border: 1px solid #555; color: #fff; border-radius: 4px; }
         #infoPanel { text-align: center; margin-top: 10px; font-size: 14px; }
         canvas { background-color: #121212; display: block; }
+        .language-overlay { position: fixed; inset: 0; background: rgba(12, 12, 12, 0.92); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 1200; }
+        .language-overlay.visible { display: flex; }
+        .language-overlay__content { background: #1e1e1e; border: 1px solid #333; border-radius: 16px; padding: 32px; max-width: 520px; width: min(90vw, 520px); box-shadow: 0 18px 45px rgba(0, 0, 0, 0.45); text-align: center; }
+        .language-overlay__content h2 { margin-top: 0; }
+        .language-overlay__content p { color: #cfcfcf; line-height: 1.5; }
+        .language-options { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin: 24px 0; }
+        .language-option { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 120px; height: 120px; background: #242424; border: 1px solid #3a3a3a; border-radius: 12px; color: inherit; font-size: 0.95rem; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .language-option:hover { transform: translateY(-4px); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); background: #2d2d2d; }
+        .language-option:disabled { opacity: 0.6; cursor: progress; transform: none; box-shadow: none; }
+        .language-overlay__flag { font-size: 2.4rem; }
+        .language-overlay__label { margin-top: 10px; display: block; font-size: 0.9rem; }
+        #customLanguageForm { text-align: left; }
+        #customLanguageForm label { font-size: 0.9rem; color: #b5b5b5; }
+        .custom-language-controls { display: flex; gap: 10px; margin-top: 8px; }
+        #customLanguageInput { flex: 1; background: #2b2b2b; border: 1px solid #3f3f3f; color: #fff; padding: 10px; border-radius: 6px; }
+        #customLanguageInput:disabled { opacity: 0.6; }
+        #languageStatus { margin-top: 22px; font-size: 0.9rem; color: #c4c4c4; min-height: 1.6em; }
+        .language-toggle { position: fixed; top: 18px; right: 18px; width: 52px; height: 52px; border-radius: 50%; background: rgba(30, 30, 30, 0.9); border: 1px solid #3a3a3a; color: #fff; font-size: 1.6rem; display: none; align-items: center; justify-content: center; z-index: 1100; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .language-toggle:hover { transform: scale(1.05); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35); background: rgba(45, 45, 45, 0.95); }
+        .language-toggle:focus-visible { outline: 2px solid #4da3ff; outline-offset: 3px; }
     </style>
 </head>
 <body>
-    <h1>Wieloosobowy Wąż</h1>
+    <div id="languageOverlay" class="language-overlay visible" role="dialog" aria-modal="true">
+        <div class="language-overlay__content">
+            <h2 data-i18n-key="chooseLanguageTitle">Wybierz język</h2>
+            <p data-i18n-key="chooseLanguageDescription">Wybierz flagę, aby zmienić język interfejsu. Możesz też wpisać kod dowolnego języka (ISO 639-1).</p>
+            <div class="language-options">
+                <button class="language-option" type="button" data-lang="pl">
+                    <span class="language-overlay__flag" aria-hidden="true">🇵🇱</span>
+                    <span class="language-overlay__label" data-i18n-key="languagePolish">Polski</span>
+                </button>
+                <button class="language-option" type="button" data-lang="en">
+                    <span class="language-overlay__flag" aria-hidden="true">🇬🇧</span>
+                    <span class="language-overlay__label" data-i18n-key="languageEnglish">Angielski</span>
+                </button>
+                <button class="language-option" type="button" data-lang="no">
+                    <span class="language-overlay__flag" aria-hidden="true">🇳🇴</span>
+                    <span class="language-overlay__label" data-i18n-key="languageNorwegian">Norweski</span>
+                </button>
+            </div>
+            <form id="customLanguageForm">
+                <label for="customLanguageInput" data-i18n-key="customLanguageLabel">Inny język (kod ISO 639-1):</label>
+                <div class="custom-language-controls">
+                    <input type="text" id="customLanguageInput" name="customLanguageInput" maxlength="10" autocomplete="off" data-i18n-key="customLanguagePlaceholder" data-i18n-attr="placeholder" placeholder="np. es, de">
+                    <button type="submit" data-i18n-key="customLanguageApply">Zastosuj</button>
+                </div>
+            </form>
+            <p id="languageStatus" data-i18n-key="languageStatusIdle">Wybierz język, aby rozpocząć.</p>
+        </div>
+    </div>
+    <button id="languageToggle" class="language-toggle" type="button" aria-label="Change language" data-i18n-key="languageToggleAria" data-i18n-attr="aria-label">🌐</button>
+    <h1 data-i18n-key="appTitle">Wieloosobowy Wąż</h1>
 
     <div id="lobbyContainer">
-        <h2>Lobby</h2>
+        <h2 data-i18n-key="lobbyTitle">Lobby</h2>
         <div id="createRoomSection" style="margin-bottom: 20px; padding: 15px; background-color: #1e1e1e; border-radius: 5px;">
-            <h3>Stwórz nowy pokój</h3>
-            <input type="text" id="passwordInput" placeholder="Hasło (opcjonalne)">
-            <button id="createRoomBtn">Stwórz Pokój</button>
+            <h3 data-i18n-key="createRoomSectionTitle">Stwórz nowy pokój</h3>
+            <input type="text" id="passwordInput" data-i18n-key="passwordPlaceholder" data-i18n-attr="placeholder" placeholder="Hasło (opcjonalne)">
+            <button id="createRoomBtn" data-i18n-key="createRoomButton">Stwórz Pokój</button>
         </div>
 
-        <h3>Dostępne Pokoje</h3>
+        <h3 data-i18n-key="availableRooms">Dostępne Pokoje</h3>
         <div id="roomList">
             </div>
     </div>
 
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
-        <p id="infoPanel">Oczekiwanie na drugiego gracza...</p>
+        <p id="infoPanel" data-i18n-key="waitingForOpponent">Oczekiwanie na drugiego gracza...</p>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
